@@ -30,9 +30,14 @@ export class VolumeTrader {
   async tick(markets) {
     const s = this.settings;
     const m = markets[this.mi % markets.length]; this.mi++;
-    const w = this.wallets[this.wi % this.wallets.length]; this.wi++;
-    const bal = this.walletBalance(w); const f = getSettings().funding;
-    if (bal && (bal.usdp < f.usdpMin || bal.sol < 0.01)) { this.skippedWallets.add(w.label); return { skipped: 'low-balance', wallet: w.label }; }
+    // next wallet with balance; underfunded wallets are skipped without spending a tick (partial funding = only a few wallets live)
+    const f = getSettings().funding; let w = null;
+    for (let k = 0; k < this.wallets.length && !w; k++) {
+      const c = this.wallets[this.wi % this.wallets.length]; this.wi++;
+      const bal = this.walletBalance(c);
+      if (bal && (bal.usdp < f.usdpMin || bal.sol < 0.01)) this.skippedWallets.add(c.label); else w = c;
+    }
+    if (!w) return { skipped: 'low-balance' };
     this.skippedWallets.delete(w.label);
     const od = this.odds[m.questId]; const p = od?.p ?? this.pStar(m); const ps = this.pStar(m);
     // outcome choice: outside the band → push back toward p*; inside → random

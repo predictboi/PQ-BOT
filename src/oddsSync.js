@@ -30,7 +30,7 @@ export function planMove({ p, pStar, model, band, maxMove, maxSpend, walletsMin,
 /** Pick wallets with the most USDP (from the cached balances); falls back to round-robin. */
 function pickWallets(k, exclude = new Set()) {
   const ws = traderWallets(); const bal = loadRuntime().balances || [];
-  const ranked = ws.map((w) => ({ w, usdp: bal.find((b) => b.index === w.index)?.usdp ?? 0 })).filter((x) => !exclude.has(x.w.index)).sort((a, b) => b.usdp - a.usdp);
+  const ranked = ws.map((w) => { const b = bal.find((x) => x.index === w.index); return { w, usdp: b?.usdp ?? 0, sol: b?.sol ?? 0 }; }).filter((x) => !exclude.has(x.w.index) && x.sol >= 0.01).sort((a, b) => b.usdp - a.usdp);
   return ranked.slice(0, k).map((x) => x.w);
 }
 
@@ -50,7 +50,8 @@ export async function syncMarket(m, s) {
     if (plan.skip) { rec.skipped = plan.reason; rec.delta = round(plan.delta, 4); return rec; }
     Object.assign(rec, { outcome: plan.outcome, spend: plan.spend, moveTarget: plan.target, expectedAfter: plan.expectedAfter, capped: plan.capped });
     const answerId = plan.i === 0 ? m.yesAnswerId : m.noAnswerId; if (!answerId) { rec.skipped = 'no-answer-id'; return rec; }
-    const wallets = pickWallets(plan.chunks.length); rec.wallets = []; rec.ok = 0; rec.fail = 0;
+    const wallets = pickWallets(plan.chunks.length); if (!wallets.length) { rec.skipped = 'no-funded-wallets'; return rec; }
+    rec.wallets = []; rec.ok = 0; rec.fail = 0;
     for (let j = 0; j < plan.chunks.length; j++) {
       const w = wallets[j % wallets.length]; const spent = plan.chunks[j];
       try { await withLock(w.address, () => pq.sessions.withSession(w.kp, (sess) => pq.trade(sess, w.kp, { questId: m.questId, answerId, spent, kind: 'BUY' }))); rec.ok++; rec.wallets.push(`${w.label}:${spent}`); }

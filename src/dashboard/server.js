@@ -43,7 +43,7 @@ export function startDashboard(S, { port = CONFIG.dashboard.port } = {}) {
       if (p === '/api/agents') return json(res, 200, Object.values(S.agents).map((a) => a.snapshot()));
       if (p === '/api/markets') { const rt = loadRuntime(); const t = tradeStats(24); return json(res, 200, allMarkets().map((m) => ({ ...m, target: rt.targets?.[m.questId] || null, volume24h: t.byMarket[m.questId] || 0, url: `${CONFIG.apiBase}/quest/${m.questId}` })).sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))); }
       if (p === '/api/wallets') { const rt = loadRuntime(); const t = tradeStats(24); const rows = (rt.balances?.length ? rt.balances : walletTable()).map((w) => ({ ...w, trades24h: t.byWallet[w.label] || 0, fails24h: t.failByWallet[w.label] || 0 })); return json(res, 200, { rows, at: rt.balancesAt || null, totals: rt.totals || null, hasMnemonic: hasMnemonic() }); }
-      if (p === '/api/settings') return json(res, 200, { settings: getSettings(), categories: CATEGORIES });
+      if (p === '/api/settings' && req.method === 'GET') return json(res, 200, { settings: getSettings(), categories: CATEGORIES });
       if (p === '/api/logs') return json(res, 200, recentLogs(Number(u.searchParams.get('limit') || 300)));
       if (p === '/api/trades') return json(res, 200, { stats: tradeStats(Number(u.searchParams.get('hours') || 24)), recent: readJsonl(REPORT_FILES.trades, { limit: Number(u.searchParams.get('limit') || 100) }).reverse() });
       if (p === '/api/snapshots') return json(res, 200, snapshots(Number(u.searchParams.get('limit') || 168)));
