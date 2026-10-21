@@ -1,0 +1,198 @@
+{
+  "generatedAt": "2026-10-20T04:06:40.915Z",
+  "derivation": "m/44'/501'/{index}'/0'",
+  "wallets": [
+    {
+      "index": 0,
+      "role": "FUNDER",
+      "label": "FUNDER",
+      "address": "3m2phVRcMyhJ8CghiuWwMvu4qx6sRxdsG8ZTjZaUgNCN"
+    },
+    {
+      "index": 1,
+      "role": "CREATOR",
+      "label": "CREATOR",
+      "address": "Gws6ppcU2cJLF2zyeebwUSSuaG9vtGjf4SP37jYBRGa4"
+    },
+    {
+      "index": 2,
+      "role": "TRADER",
+      "label": "TRADER-01",
+      "address": "6AoNyXGxNPJ9FtsrGn2xsFXKf8YQrpU61H5pUrZv3xx6"
+    },
+    {
+      "index": 3,
+      "role": "TRADER",
+      "label": "TRADER-02",
+      "address": "4Pd4bof79abBTuDKr9BJfu6uHF5w5BMkr1SXXai7azxG"
+    },
+    {
+      "index": 4,
+      "role": "TRADER",
+      "label": "TRADER-03",
+      "address": "wdEoY6jCNpNatArBiU2dJ9sdqn44jLmKFgkAQsxnrRV"
+    },
+    {
+      "index": 5,
+      "role": "TRADER",
+      "label": "TRADER-04",
+      "address": "EXmj2PfthGqgdoPTYjQvAYbXPJU1jLegcthbugxJ4215"
+    },
+    {
+      "index": 6,
+      "role": "TRADER",
+      "label": "TRADER-05",
+      "address": "4idtqTFtRAU5tPNzZv4qEQbWuiUeoeCAVpFMkpNem8j8"
+    },
+    {
+      "index": 7,
+      "role": "TRADER",
+      "label": "TRADER-06",
+      "address": "EgfQQXED3pjkfsCbbbMpTRnESA5n8fCLUM39YcuVai3X"
+    },
+    {
+      "index": 8,
+      "role": "TRADER",
+      "label": "TRADER-07",
+      "address": "HPvX14FfHVWzmUgHj5Fwh3mun5pohnh6GJ1BZMuTjoUP"
+    },
+    {
+      "index": 9,
+      "role": "TRADER",
+      "label": "TRADER-08",
+      "address": "4hdX3cHKfhEYyugnSX2oWijtcjmy5LQt9kXkr5gSHP8R"
+    },
+    {
+      "index": 10,
+      "role": "TRADER",
+      "label": "TRADER-09",
+      "address": "EoknfSDRKGpLe28Q1ko6KUw1f2jnPat6iXreuGRdmS1A"
+    },
+    {
+      "index": 11,
+      "role": "TRADER",
+      "label": "TRADER-10",
+      "address": "9Pv7sA3EYb6hmKKqJpef1EustBu3WJAW28B9xPgqYG32"
+    },
+    {
+      "index": 12,
+      "role": "TRADER",
+      "label": "TRADER-11",
+      "address": "7KjFaq7DMaTj4UxpsGWxTf3DhwDTnqknBaLQTuUCWfK7"
+    },
+    {
+      "index": 13,
+      "role": "TRADER",
+      "label": "TRADER-12",
+      "address": "6niADQr4TD3hoPNgT4VRViuBPZtkVvo1BQpuyqjKRqGe"
+    },
+    {
+      "index": 14,
+      "role": "TRADER",
+      "label": "TRADER-13",
+      "address": "CePcGHApCr9stGiFuht9vYfXDEg2ZHw9iZosL2556dV6"
+    },
+    {
+      "index": 15,
+      "role": "TRADER",
+      "label": "TRADER-14",
+      "address": "78V79mWHv6rFVF3kNBa6oXzMCo2CojAFau8SPdyHspv5"
+    },
+    {
+      "index": 16,
+      "role": "TRADER",
+      "label": "TRADER-15",
+      "address": "Gu5MpSsi68Qp96VxCe372cmv1rnPD3aCsYatCP4bPMTR"
+    },
+    {
+      "index": 17,
+      "role": "TRADER",
+      "label": "TRADER-16",
+      "address": "2iMfVC36cP6DoW6JxL6buS22RhUnv4UwXETfEykP6jK3"
+    },
+    {
+      "index": 18,
+      "role": "TRADER",
+      "label": "TRADER-17",
+      "address": "CwHkQpo89MZWXdVo5w45fkuwsdkcjayzvrPtUqLRF6eu"
+    },
+    {
+      "index": 19,
+      "role": "TRADER",
+      "label": "TRADER-18",
+      "address": "GE2TCvNbi3HcyxpUsgHPwqexiau9DgdDQxZeu1w5vqR"
+    },
+    {
+      "index": 20,
+      "role": "TRADER",
+      "label": "TRADER-19",
+      "address": "4NvUesXNyBzBY9ATs64FBgEBemcPmQxDH13Mj9ftiLa2"
+    },
+    {
+      "index": 21,
+      "role": "TRADER",
+      "label": "TRADER-20",
+      "address": "4uZUQ1QFXr9VsaAZeAqmk8zWtRCC61ZppqCPDGM8VHAw"
+    },
+    {
+      "index": 22,
+      "role": "TRADER",
+      "label": "TRADER-21",
+      "address": "CDrWutrXYvwrb4R5P1R7bDFJ672uojx479pWPhyw7jny"
+    },
+    {
+      "index": 23,
+      "role": "TRADER",
+      "label": "TRADER-22",
+      "address": "8RMcSkGvYoGbbQnzqPUrjuVQzdbGVPdJJFjvZAVeZkZL"
+    },
+    {
+      "index": 24,
+      "role": "TRADER",
+      "label": "TRADER-23",
+      "address": "HFVGUBDShpM9ucfaGEqqNSfuCRRAo8H9eQ3kiHHABAbF"
+    },
+    {
+      "index": 25,
+      "role": "TRADER",
+      "label": "TRADER-24",
+      "address": "Hr7mmsbyjuMkaJEKM7D8xUMpg7du8XEPRU5h2E4Kt4ug"
+    },
+    {
+      "index": 26,
+      "role": "TRADER",
+      "label": "TRADER-25",
+      "address": "4TuYE9DrCGU9RzuQw7d4LvV3ovUpBYwA7qFRqkYUGEoC"
+    },
+    {
+      "index": 27,
+      "role": "TRADER",
+      "label": "TRADER-26",
+      "address": "D36okb7Eqwrq8Fa3bm68HoGwCtgGuBo3XnFEDRcbfJd9"
+    },
+    {
+      "index": 28,
+      "role": "TRADER",
+      "label": "TRADER-27",
+      "address": "9oyxZ6yCxGD2VFwmvaiCy7xaBMEKQAFDhHYNxqbqpBDW"
+    },
+    {
+      "index": 29,
+      "role": "TRADER",
+      "label": "TRADER-28",
+      "address": "ACKWJCPByp69JsQgrQQmPArouxXZzYccs9rdT5iffdxe"
+    },
+    {
+      "index": 30,
+      "role": "TRADER",
+      "label": "TRADER-29",
+      "address": "zv2gyRWLsZ6TtB5RJEiuy65AtYkwCCh971VYwcVa1Ti"
+    },
+    {
+      "index": 31,
+      "role": "TRADER",
+      "label": "TRADER-30",
+      "address": "BEWmaRZeGNW11HtJJJjhgK6Mxo9wXUDcQsPvtiAH9idA"
+    }
+  ]
+}

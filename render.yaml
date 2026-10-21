@@ -1,0 +1,37 @@
+# Render Blueprint — Polyquest 운영 봇 (이 저장소 = 봇 전용)
+# Render 대시보드 → Blueprints → New → 이 저장소 선택. 비밀값은 Blueprint에 없으며 Environment에서 입력한다.
+services:
+  - type: web
+    name: polyquest-bot
+    runtime: node
+    plan: starter            # free 플랜은 유휴 시 중지되어 봇이 멈춘다 → starter 이상
+    region: singapore
+    branch: main
+    buildCommand: npm ci --omit=dev
+    startCommand: npm start
+    healthCheckPath: /health
+    autoDeploy: true
+    disk:
+      name: polyquest-bot-data
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: DATA_ROOT
+        value: /var/data
+      - key: POLYQUEST_API_BASE
+        value: https://solana-stg.polyquest.xyz
+      - key: PUBLIC_BASE_URL
+        value: https://polyquest-bot.onrender.com   # 서비스 이름이 다르면 같이 변경
+      # ── 비밀값: Render Environment에서 입력 ──
+      - key: MNEMONIC
+        sync: false
+      - key: RPC_URL
+        sync: false
+      - key: DASHBOARD_TOKEN
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false

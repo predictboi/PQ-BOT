@@ -1,0 +1,13 @@
+# secrets — never commit
+.env
+.env.*
+!.env.example
+*.key
+secrets/
+
+# runtime output
+node_modules/
+reports/
+data/
+state/runtime.json
+state/settings.json
