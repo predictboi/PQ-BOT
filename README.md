@@ -55,7 +55,7 @@ npm run status         # 터미널 상태 요약
 npm test               # 단위 테스트 (LS-LMSR · 지갑 파생 · Polymarket 파싱 · 오즈 싱크 계획)
 DRY_RUN=1 npm start    # 서명/전송 없이 계획만 로그
 ```
-개별 실행: `node bin/run-creator.js [--max N|--sync|--status]`, `node bin/run-trader.js --minutes 30`, `node bin/run-odds-sync.js`, `node bin/resolve-check.js [--resolve <questId> YES|NO|REVOKE]`, `node bin/fund.js --plan|--initial|--topup|--balances|--sweep`.
+개별 실행: `node bin/run-creator.js [--max N|--sync|--status]`, `node bin/run-trader.js --minutes 30`, `node bin/run-odds-sync.js`, `node bin/resolve-check.js [--resolve <questId> YES|NO|REVOKE]`, `node bin/fund.js --plan|--initial [--traders N --creator-sol X --trader-sol X --creator-usdp X --trader-usdp X]|--topup|--balances|--sweep|--from-master|--from-admin --sol X --usdp Y` (`--traders 2` 처럼 일부 지갑만 먼저 분배 가능).
 
 ## 대시보드
 - **개요**: Day-0 체크리스트, KPI(라이브/목표 · 24h 거래/성공률 · 볼륨 · 인밴드 · 트레저리), 카테고리 진행, 에이전트 카드(지금 실행/일시정지), 실시간 로그
@@ -88,4 +88,4 @@ DRY_RUN=1 npm start    # 서명/전송 없이 계획만 로그
 | `GEMINI_API_KEY` | 마켓 썸네일 생성 — Polymarket/Kalshi 스타일(히어로 주제 1개, 텍스트·숫자·로고 금지, 풀블리드 1:1, 512×512 JPG). 주제는 Claude 작성값 → 질문 키워드 규칙(`subjectFor`) → 카테고리 기본값 순. 없으면 로컬 추상 타일(텍스트 없음) |
 | `ANTHROPIC_API_KEY` | 마켓 제목/설명 한국어 작성 (없으면 원문 질문 + 한국어 템플릿) |
 | `ADMIN_SECRET_KEY` | 해결 시 크리에이터 권한이 거부될 때만 어드민 세션으로 폴백 |
-| `MASTER_SECRET_KEY` | `fund.js --from-master` 로 FUNDER 입금할 때만 |
+| `MASTER_SECRET_KEY` | `fund.js --from-master` 로 FUNDER 입금할 때만 (`ADMIN_SECRET_KEY`는 `--from-admin`으로 동일하게 입금 가능) |

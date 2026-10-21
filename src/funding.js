@@ -28,11 +28,14 @@ export async function refreshBalances() {
 export const cachedBalances = () => loadRuntime().balances || [];
 
 /** Compute transfers needed. mode 'initial' tops every wallet up to its init target; 'topup' only refills wallets under the minimum. */
-export function plan(rows, mode = 'topup') {
-  const f = getSettings().funding; const funder = rows.find((w) => w.index === FUNDER_INDEX);
+export function plan(rows, mode = 'topup', opts = {}) {
+  const f = { ...getSettings().funding, ...Object.fromEntries(Object.entries(opts).filter(([, v]) => v !== undefined && v !== null)) };
+  const funder = rows.find((w) => w.index === FUNDER_INDEX);
   const transfers = [];
   for (const w of rows) {
     if (w.index === FUNDER_INDEX) continue;
+    // opts.traders = N limits an initial distribution to CREATOR + TRADER-01..N (partial Day-0 while funds are short)
+    if (mode === 'initial' && Number.isFinite(f.traders) && w.role === 'TRADER' && w.index - CREATOR_INDEX > f.traders) continue;
     const solTarget = w.role === 'CREATOR' ? f.creatorSolInit : f.traderSolInit;
     const usdpTarget = w.role === 'CREATOR' ? f.creatorUsdpInit : f.traderUsdpInit;
     let sol = 0, usdp = 0;
@@ -67,7 +70,8 @@ export async function execute(p, { pauseMs = 1500 } = {}) {
   return { done, failed };
 }
 
-export async function distributeInitial() { const rows = await refreshBalances(); const p = plan(rows, 'initial'); const r = await execute(p); await refreshBalances(); return { plan: p, ...r }; }
+/** Initial distribution. opts: { traders, creatorSolInit, traderSolInit, creatorUsdpInit, traderUsdpInit } override the settings for this run only. */
+export async function distributeInitial(opts = {}) { const rows = await refreshBalances(); const p = plan(rows, 'initial', opts); const r = await execute(p); await refreshBalances(); return { plan: p, ...r }; }
 export async function topUp() { const rows = await refreshBalances(); const p = plan(rows, 'topup'); if (!p.transfers.length) return { plan: p, done: [], failed: [] }; const r = await execute(p); if (r.done.length) await refreshBalances(); return { plan: p, ...r }; }
 
 /** Sweep USDP (and SOL above a small reserve) from traders (+creator) back to FUNDER. */
@@ -85,12 +89,14 @@ export async function sweep({ includeCreator = false, solReserve = 0.01 } = {}) 
   await refreshBalances(); return { done, failed };
 }
 
-/** One-off: move SOL/USDP from the master wallet (MASTER_SECRET_KEY, bs58) into FUNDER. Plain transfer. */
-export async function fundFromMaster({ sol = 0, usdp = 0 } = {}) {
-  if (!CONFIG.masterSecretKey) throw new Error('MASTER_SECRET_KEY not set');
-  const master = Keypair.fromSecretKey(bs58.decode(CONFIG.masterSecretKey));
-  const to = FUNDER().publicKey.toBase58(); const out = { from: master.publicKey.toBase58(), to };
-  if (sol > 0) out.solSig = await transferSol(master, to, sol);
-  if (usdp > 0) out.usdpSig = await transferUsdp(master, to, usdp);
+/** One-off: move SOL/USDP from a privileged wallet (bs58 secret from the env) into FUNDER. Plain transfer, never a platform action. */
+async function fundFromKey(secretKey, envName, { sol = 0, usdp = 0 } = {}) {
+  if (!secretKey) throw new Error(`${envName} not set`);
+  const kp = Keypair.fromSecretKey(bs58.decode(secretKey));
+  const to = FUNDER().publicKey.toBase58(); const out = { from: kp.publicKey.toBase58(), to };
+  if (sol > 0) out.solSig = await transferSol(kp, to, sol);
+  if (usdp > 0) out.usdpSig = await transferUsdp(kp, to, usdp);
   await refreshBalances(); return out;
 }
+export const fundFromMaster = (amounts) => fundFromKey(CONFIG.masterSecretKey, 'MASTER_SECRET_KEY', amounts);
+export const fundFromAdmin = (amounts) => fundFromKey(CONFIG.adminSecretKey, 'ADMIN_SECRET_KEY', amounts);
