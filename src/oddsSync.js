@@ -4,7 +4,8 @@ import path from 'node:path';
 import { CONFIG, PATHS } from './config.js';
 import { traderWallets } from './wallets.js';
 import * as pq from './client/polyquest.js';
-import { modelFromState, spendToReachPrice } from './lslmsr.js';
+import { LsLmsr, modelFromState, spendToReachPrice } from './lslmsr.js';
+import { readMarket } from './chain/read.js';
 import { yesProbability } from './polymarket.js';
 import { withLock } from './locks.js';
 import { getSettings, liveMarkets, isMapped, loadRuntime, patchRuntime, patchMarket } from './state.js';
@@ -27,17 +28,25 @@ export function planMove({ p, pStar, model, band, maxMove, maxSpend, walletsMin,
   return { skip: false, outcome: i === 0 ? 'YES' : 'NO', i, spend, target: round(target, 4), expectedAfter: round(i === 0 ? r.priceAfter : 1 - r.priceAfter, 4), capped: r.capped, chunks, delta };
 }
 
+/** LS-LMSR model for a quest: backend `quest.lslmsrState`, or the on-chain market account (read-only) when the backend returns null. */
+export async function marketModel(questId) {
+  const st = await pq.lslmsrState(questId).catch(() => null);
+  if (st?.marketState) return modelFromState(st.marketState);
+  const m = await readMarket(questId); if (!m) throw new Error('market account not found');
+  return new LsLmsr({ alpha: m.alpha, q: m.q });
+}
+
 /** Pick wallets with the most USDP (from the cached balances); falls back to round-robin. */
 function pickWallets(k, exclude = new Set()) {
   const ws = traderWallets(); const bal = loadRuntime().balances || [];
-  const ranked = ws.map((w) => ({ w, usdp: bal.find((b) => b.index === w.index)?.usdp ?? 0 })).filter((x) => !exclude.has(x.w.index)).sort((a, b) => b.usdp - a.usdp);
+  const ranked = ws.map((w) => { const b = bal.find((x) => x.index === w.index); return { w, usdp: b?.usdp ?? 0, sol: b?.sol ?? 0 }; }).filter((x) => !exclude.has(x.w.index) && x.sol >= 0.01).sort((a, b) => b.usdp - a.usdp);
   return ranked.slice(0, k).map((x) => x.w);
 }
 
 export async function syncMarket(m, s) {
   const rec = { t: new Date().toISOString(), questId: m.questId, title: m.title };
   try {
-    const st = await pq.lslmsrState(m.questId); const model = modelFromState(st.marketState);
+    const model = await marketModel(m.questId);
     const p = model.normPrices()[0]; rec.pBefore = round(p, 4);
     let pStar, source;
     if (m.polymarket?.id) { const r = await yesProbability(m.polymarket); pStar = r.p; source = r.source; if (r.market?.closed) rec.pmClosed = true; }
@@ -50,14 +59,15 @@ export async function syncMarket(m, s) {
     if (plan.skip) { rec.skipped = plan.reason; rec.delta = round(plan.delta, 4); return rec; }
     Object.assign(rec, { outcome: plan.outcome, spend: plan.spend, moveTarget: plan.target, expectedAfter: plan.expectedAfter, capped: plan.capped });
     const answerId = plan.i === 0 ? m.yesAnswerId : m.noAnswerId; if (!answerId) { rec.skipped = 'no-answer-id'; return rec; }
-    const wallets = pickWallets(plan.chunks.length); rec.wallets = []; rec.ok = 0; rec.fail = 0;
+    const wallets = pickWallets(plan.chunks.length); if (!wallets.length) { rec.skipped = 'no-funded-wallets'; return rec; }
+    rec.wallets = []; rec.ok = 0; rec.fail = 0;
     for (let j = 0; j < plan.chunks.length; j++) {
       const w = wallets[j % wallets.length]; const spent = plan.chunks[j];
       try { await withLock(w.address, () => pq.sessions.withSession(w.kp, (sess) => pq.trade(sess, w.kp, { questId: m.questId, answerId, spent, kind: 'BUY' }))); rec.ok++; rec.wallets.push(`${w.label}:${spent}`); }
       catch (e) { rec.fail++; rec.wallets.push(`${w.label}:${spent}:FAIL`); log.error(`q${m.questId} ${w.label} ${spent} failed:`, e.message.slice(0, 120)); }
       await sleep(s.pauseMs);
     }
-    if (!CONFIG.dryRun) { await sleep(2500); try { const st2 = await pq.lslmsrState(m.questId); rec.pAfter = round(modelFromState(st2.marketState).normPrices()[0], 4); patchMarket(m.questId, { p: rec.pAfter, pAt: new Date().toISOString() }); } catch { /* ignore */ } }
+    if (!CONFIG.dryRun) { await sleep(2500); try { rec.pAfter = round((await marketModel(m.questId)).normPrices()[0], 4); patchMarket(m.questId, { p: rec.pAfter, pAt: new Date().toISOString() }); } catch { /* ignore */ } }
     log.info(`q${m.questId} ${rec.pBefore} → ${rec.pTarget} (${source}) buy ${plan.outcome} ${plan.spend} → after ${rec.pAfter ?? '?'} (${rec.ok} ok / ${rec.fail} fail)`);
   } catch (e) { rec.error = e.message.slice(0, 160); log.error(`q${m.questId} sync error:`, e.message.slice(0, 160)); }
   finally { appendJsonl(REPORT, rec); }
