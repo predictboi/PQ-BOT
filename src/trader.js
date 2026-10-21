@@ -5,6 +5,7 @@ import { CONFIG, PATHS } from './config.js';
 import { traderWallets } from './wallets.js';
 import * as pq from './client/polyquest.js';
 import { withLock } from './locks.js';
+import { marketModel } from './oddsSync.js';
 import { getSettings, liveMarkets, loadRuntime, patchMarket } from './state.js';
 import { createLogger, sleep, rnd, appendJsonl, withTimeout, round } from './util.js';
 
@@ -22,6 +23,7 @@ export class VolumeTrader {
     if (!markets.length) return;
     try {
       const states = await pq.lslmsrStates(markets.map((m) => m.questId));
+      for (const s of states || []) if (!s.prices) { try { s.prices = (await marketModel(s.questId)).normPrices(); } catch { /* leave unknown → p* */ } } // backend null → on-chain
       for (const s of states || []) { this.odds[s.questId] = { p: s.prices?.[0], prices: s.prices, since: 0, at: Date.now() }; patchMarket(s.questId, { p: s.prices?.[0], pAt: new Date().toISOString() }); }
     } catch (e) { log.warn('snap failed:', e.message.slice(0, 100)); }
   }

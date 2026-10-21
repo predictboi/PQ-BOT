@@ -4,7 +4,8 @@ import path from 'node:path';
 import { CONFIG, PATHS } from './config.js';
 import { traderWallets } from './wallets.js';
 import * as pq from './client/polyquest.js';
-import { modelFromState, spendToReachPrice } from './lslmsr.js';
+import { LsLmsr, modelFromState, spendToReachPrice } from './lslmsr.js';
+import { readMarket } from './chain/read.js';
 import { yesProbability } from './polymarket.js';
 import { withLock } from './locks.js';
 import { getSettings, liveMarkets, isMapped, loadRuntime, patchRuntime, patchMarket } from './state.js';
@@ -27,6 +28,14 @@ export function planMove({ p, pStar, model, band, maxMove, maxSpend, walletsMin,
   return { skip: false, outcome: i === 0 ? 'YES' : 'NO', i, spend, target: round(target, 4), expectedAfter: round(i === 0 ? r.priceAfter : 1 - r.priceAfter, 4), capped: r.capped, chunks, delta };
 }
 
+/** LS-LMSR model for a quest: backend `quest.lslmsrState`, or the on-chain market account (read-only) when the backend returns null. */
+export async function marketModel(questId) {
+  const st = await pq.lslmsrState(questId).catch(() => null);
+  if (st?.marketState) return modelFromState(st.marketState);
+  const m = await readMarket(questId); if (!m) throw new Error('market account not found');
+  return new LsLmsr({ alpha: m.alpha, q: m.q });
+}
+
 /** Pick wallets with the most USDP (from the cached balances); falls back to round-robin. */
 function pickWallets(k, exclude = new Set()) {
   const ws = traderWallets(); const bal = loadRuntime().balances || [];
@@ -37,7 +46,7 @@ function pickWallets(k, exclude = new Set()) {
 export async function syncMarket(m, s) {
   const rec = { t: new Date().toISOString(), questId: m.questId, title: m.title };
   try {
-    const st = await pq.lslmsrState(m.questId); const model = modelFromState(st.marketState);
+    const model = await marketModel(m.questId);
     const p = model.normPrices()[0]; rec.pBefore = round(p, 4);
     let pStar, source;
     if (m.polymarket?.id) { const r = await yesProbability(m.polymarket); pStar = r.p; source = r.source; if (r.market?.closed) rec.pmClosed = true; }
@@ -58,7 +67,7 @@ export async function syncMarket(m, s) {
       catch (e) { rec.fail++; rec.wallets.push(`${w.label}:${spent}:FAIL`); log.error(`q${m.questId} ${w.label} ${spent} failed:`, e.message.slice(0, 120)); }
       await sleep(s.pauseMs);
     }
-    if (!CONFIG.dryRun) { await sleep(2500); try { const st2 = await pq.lslmsrState(m.questId); rec.pAfter = round(modelFromState(st2.marketState).normPrices()[0], 4); patchMarket(m.questId, { p: rec.pAfter, pAt: new Date().toISOString() }); } catch { /* ignore */ } }
+    if (!CONFIG.dryRun) { await sleep(2500); try { rec.pAfter = round((await marketModel(m.questId)).normPrices()[0], 4); patchMarket(m.questId, { p: rec.pAfter, pAt: new Date().toISOString() }); } catch { /* ignore */ } }
     log.info(`q${m.questId} ${rec.pBefore} → ${rec.pTarget} (${source}) buy ${plan.outcome} ${plan.spend} → after ${rec.pAfter ?? '?'} (${rec.ok} ok / ${rec.fail} fail)`);
   } catch (e) { rec.error = e.message.slice(0, 160); log.error(`q${m.questId} sync error:`, e.message.slice(0, 160)); }
   finally { appendJsonl(REPORT, rec); }
