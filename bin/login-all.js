@@ -7,7 +7,7 @@ import { sleep } from '../src/util.js';
 import { parseArgs } from './_cli.js';
 const a = parseArgs();
 const only = a.only ? new Set(String(a.only).split(',').map((x) => x.trim().toUpperCase())) : null;
-const emailFor = (w) => (a['email-domain'] ? `${w.role === 'CREATOR' ? 'creator1' : w.role === 'FUNDER' ? 'funder1' : `trade${w.index - 1}`}@${a['email-domain']}` : null);
+const emailFor = (w) => (a['email-domain'] ? `${w.label === 'CREATOR-02' ? 'creator2' : w.role === 'CREATOR' ? 'creator1' : w.role === 'FUNDER' ? 'funder1' : `trade${w.index - 1}`}@${a['email-domain']}` : null);
 let ok = 0, fail = 0;
 for (const w of allWallets()) {
   if (only && !only.has(w.label.toUpperCase())) continue;

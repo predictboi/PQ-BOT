@@ -5,7 +5,7 @@
 
 ## 원칙 (절대 위반 금지)
 1. **모든 플랫폼 동작은 유저 플로우로만** — 지갑 로그인 → 프론트가 호출하는 tRPC를 그대로(`quest.draft → confirmDraftLslmsr`, `betting.draftLslmsr → confirm/confirmSell`, `quest.updateStatus`) → 서버가 준 tx를 지갑으로 서명. 온체인 ix 직접 전송·DB 직접 수정 금지. 온체인은 **읽기**(잔액, 마켓 계정 디코드)와 **일반 송금**(펀딩/회수)만.
-2. **키는 니모닉 1개에서 전부 파생** (`m/44'/501'/{i}'/0'`, Phantom 호환). index 0 FUNDER · 1 CREATOR · 2~31 TRADER-01~30. 개인키 파일은 만들지 않는다.
+2. **키는 니모닉 1개에서 전부 파생** (`m/44'/501'/{i}'/0'`, Phantom 호환). index 0 FUNDER · 1 CREATOR · 2~31 TRADER-01~30 · 32 CREATOR-02. 개인키 파일은 만들지 않는다.
 
 ## 구성
 ```
@@ -38,7 +38,8 @@
 ## Day-0 체크리스트 (대시보드 개요 탭에 실시간 표시)
 1. `npm run gen-mnemonic -- --out <안전한 경로>` → 24단어를 패스워드 매니저 + **Environment Secrets / Railway Variables**에 `MNEMONIC` 으로 등록 (이미 생성·전달됨: `state/addresses.json` 참고)
 2. `npm run init-wallets` → `state/addresses.json` (주소만) 커밋. Phantom에 니모닉 import → 계정 1~3 = index 0~2 주소 일치 확인. **일치 전 펀딩 금지**
-3. FUNDER(index 0)에 **≈12 SOL + ≈2.5M USDP** 입금 (또는 `MASTER_SECRET_KEY` 설정 후 `node bin/fund.js --from-master --sol 12 --usdp 2500000`)
+3. FUNDER(index 0)에 **≈3.5 SOL + ≈2.5M USDP** 입금 (또는 `MASTER_SECRET_KEY` 설정 후 `node bin/fund.js --from-master --sol 3.5 --usdp 2500000`).
+   SOL 예산(3~4 SOL): 크리에이터 2 × 0.3 + 트레이더 30 × 0.08 + FUNDER 예비 0.2 = 3.2 SOL 초기 분배, 나머지는 탑업 여유(지갑이 0.03 미만이면 +0.04).
 4. `node bin/login-all.js` (이미 1회 수행 → 유저 row 생성됨) → 사람이 마스터 지갑으로 `/admin` 접속, **CREATOR 주소를 Creator로 승격** → 체크리스트 "CREATOR 승격" ✓
 5. 대시보드 지갑 탭 **초기 분배** (또는 `node bin/fund.js --initial`)
 6. 설정 탭에서 카테고리 목표 확인 (기본: Politics/Sports/Crypto/Economics 10, 그 외 5)
@@ -61,7 +62,7 @@ DRY_RUN=1 npm start    # 서명/전송 없이 계획만 로그
 - **개요**: Day-0 체크리스트, KPI(라이브/목표 · 24h 거래/성공률 · 볼륨 · 인밴드 · 트레저리), 카테고리 진행, 에이전트 카드(지금 실행/일시정지), 실시간 로그
 - **에이전트**: 상태·다음 실행·마지막 결과·실행 이력
 - **마켓**: p(우리) vs p*(Polymarket) 바·Δ 칩, 24h 볼륨, D-day, 상태, Polyquest/Polymarket 링크, **해결(YES/NO/REVOKE)**, 테스트 거래
-- **지갑**: 32개 잔액·24h 거래/실패, 잔액 새로고침 · 초기 분배 · 탑업 · 회수
+- **지갑**: 33개 잔액·24h 거래/실패, 잔액 새로고침 · 초기 분배 · 탑업 · 회수
 - **리포트**: 시간별 차트(인밴드% · 24h 볼륨 · 성공률 · USDP 합계), 일간 리포트, 오즈 싱크 기록
 - **설정**: 카테고리 목표, 에이전트 on/off, 트레이더/오즈 싱크/펀딩 파라미터, cron — 저장 즉시 반영
 - 인증: `DASHBOARD_TOKEN` (쿠키 로그인 / `Authorization: Bearer` / `?token=`). 썸네일은 `/thumbs/*` 공개.

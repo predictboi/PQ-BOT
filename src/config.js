@@ -40,7 +40,7 @@ export const DEFAULT_SETTINGS = {
   creator: { cron: '0 */6 * * *', endDateMinDays: 3, endDateMaxDays: 90, maxCreatePerRun: 12, pauseMs: 4000 },
   trader: { tradesPerHourPerMarket: num('TRADES_PER_HOUR_PER_MARKET', 24), base: [20, 120], flux: [300, 700], fluxP: 0.15, buyBias: 0.52, band: 0.05, snapEvery: 15, reloginEvery: 120, minTickMs: 2500 },
   oddsSync: { cron: env('ODDS_SYNC_CRON', '7 * * * *'), band: num('ODDS_BAND', 0.02), maxMove: num('MAX_MOVE_PER_SYNC', 0.08), maxSpend: num('ODDS_MAX_SPEND', 3000), walletsMin: 2, walletsMax: 4, pauseMs: 2000 },
-  funding: { cron: '*/30 * * * *', solMin: num('SOL_MIN', 0.05), solTopup: num('SOL_TOPUP', 0.1), usdpMin: num('USDP_MIN', 500), usdpTopup: num('USDP_TOPUP', 5000), traderSolInit: 0.25, traderUsdpInit: 50000, creatorSolInit: 1.5, creatorUsdpInit: 900000, funderSolReserve: 0.2 },
+  funding: { cron: '*/30 * * * *', solMin: num('SOL_MIN', 0.03), solTopup: num('SOL_TOPUP', 0.04), usdpMin: num('USDP_MIN', 500), usdpTopup: num('USDP_TOPUP', 5000), traderSolInit: 0.08, traderUsdpInit: 50000, creatorSolInit: 0.3, creatorUsdpInit: 900000, funderSolReserve: 0.2 },
   resolver: { cron: '30 0 * * *' },
   reporter: { cron: '3 * * * *' },
 };

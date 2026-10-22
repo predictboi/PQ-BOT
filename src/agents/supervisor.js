@@ -38,7 +38,8 @@ export class Supervisor extends EventEmitter {
     let api = { ok: false }; try { const c = await pq.categories(); api = { ok: true, n: (c?.data || c || []).length }; } catch (e) { api = { ok: false, error: e.message }; }
     items.push({ key: 'api', label: `Polyquest API (${CONFIG.apiBase})`, ok: api.ok, detail: api.ok ? `연결됨 · 카테고리 ${api.n}개` : `실패: ${api.error}` });
     const rt = loadRuntime(); const funder = rt.balances?.find((b) => b.index === 0);
-    const needSol = round(f.creatorSolInit + f.traderSolInit * CONFIG.traderCount + f.funderSolReserve, 2), needUsdp = round(f.creatorUsdpInit + f.traderUsdpInit * CONFIG.traderCount, 0);
+    const nCreators = funding.walletTable().filter((w) => w.role === 'CREATOR').length || 1;
+    const needSol = round(f.creatorSolInit * nCreators + f.traderSolInit * CONFIG.traderCount + f.funderSolReserve, 2), needUsdp = round(f.creatorUsdpInit * nCreators + f.traderUsdpInit * CONFIG.traderCount, 0);
     const funded = funder && funder.sol >= needSol * 0.5 && funder.usdp >= needUsdp * 0.5;
     items.push({ key: 'funder', label: 'FUNDER 입금 (SOL + USDP)', ok: !!funded, warn: !!funder && !funded && (funder.sol > 0 || funder.usdp > 0), detail: funder ? `현재 ${funder.sol} SOL / ${funder.usdp} USDP · 권장 ${needSol} SOL / ${needUsdp.toLocaleString()} USDP · 주소 ${funder.address}` : (mn ? '잔액 미조회 — 펀딩 에이전트 실행' : 'MNEMONIC 필요') });
     let cr = null; if (mn && api.ok) { try { cr = await creator.creatorStatus(); } catch (e) { cr = { error: e.message }; } }
