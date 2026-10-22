@@ -11,3 +11,4 @@ reports/
 data/
 state/runtime.json
 state/settings.json
+state/markets.json
