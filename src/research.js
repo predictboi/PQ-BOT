@@ -44,19 +44,29 @@ async function claudeWriter(items) {
   return arr;
 }
 
+const score = (m) => (m.volume24hr || 0) * (m.eventMarketCount === 1 ? 1.5 : 1) + (m.liquidity || 0) * 0.05; // liquid, active markets first; single-market events get a bonus
+
+/** Choose `need` markets, one per Polymarket event, skipping events we already list. With buckets: round-robin over them. */
+export function chooseMarkets(cands, need, { buckets = null, exclude = null, priceBand = null, usedEvents = new Set() } = {}) {
+  const ok = (m) => !(exclude && exclude.test(`${m.question} ${m.eventTitle || ''}`)) && !(priceBand && !(m.yesPrice >= priceBand[0] && m.yesPrice <= priceBand[1]));
+  const taken = new Set(usedEvents); const chosen = [];
+  const take = (pool) => { for (const m of pool) { const k = m.eventSlug || m.id; if (taken.has(k) || !ok(m)) continue; taken.add(k); chosen.push(m); return true; } return false; };
+  if (!buckets) { for (const m of [...cands].sort((a, b) => score(b) - score(a))) { if (chosen.length >= need) break; take([m]); } return chosen; }
+  const pools = buckets.map((b) => cands.filter((m) => b.tags.includes(m.tag)).sort((a, c) => score(c) - score(a)));
+  let progress = true;
+  while (chosen.length < need && progress) { progress = false; for (const pool of pools) { if (chosen.length >= need) break; if (take(pool)) progress = true; } }
+  return chosen;
+}
+
 /** Build specs for `need` new markets in a category. */
 export async function pickTopics(categoryId, need, { minDays, maxDays } = {}) {
   const cat = categoryById(categoryId); if (!cat) throw new Error(`unknown category ${categoryId}`);
   const used = new Set(allMarkets().map((m) => m.polymarket?.conditionId).filter(Boolean));
+  const usedEvents = new Set(allMarkets().map((m) => m.polymarket?.eventSlug).filter(Boolean));
   const usedTitles = new Set(allMarkets().map((m) => m.title));
-  const cands = (await candidateMarkets(cat.tags, { minDays, maxDays })).filter((m) => !used.has(m.conditionId));
-  // prefer single-market events (clean questions), then volume; one market per event (avoids complementary pairs like D-House / R-House)
-  const perEvent = {}; const chosen = [];
-  const score = (m) => (m.volume24hr || 0) * (m.eventMarketCount === 1 ? 1.5 : 1) + (m.liquidity || 0) * 0.05; // liquid, active markets first; single-market events get a bonus
-  for (const m of [...cands].sort((a, b) => score(b) - score(a))) {
-    const k = m.eventSlug || m.id; perEvent[k] = (perEvent[k] || 0) + 1; if (perEvent[k] > 1) continue;
-    chosen.push(m); if (chosen.length >= need) break;
-  }
+  const tags = cat.buckets ? [...new Set(cat.buckets.flatMap((b) => b.tags))] : cat.tags;
+  const cands = (await candidateMarkets(tags, { minDays, maxDays })).filter((m) => !used.has(m.conditionId));
+  const chosen = chooseMarkets(cands, need, { buckets: cat.buckets || null, exclude: cat.exclude || null, priceBand: cat.priceBand || null, usedEvents });
   let written = null; try { written = await claudeWriter(chosen); } catch (e) { log.warn('Claude writer failed, falling back to template:', e.message); }
   const specs = chosen.map((pm, i) => {
     const w = written?.[i] || templateSpec(pm, cat);
