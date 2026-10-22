@@ -22,7 +22,19 @@ export const PATHS = {
 // Polyquest categories (verified via category.listAll on solana-stg) and the Polymarket tag slugs used to source topics.
 export const CATEGORIES = [
   { id: 1, name: 'Politics', ko: '정치', tags: ['politics', 'elections', 'geopolitics'] },
-  { id: 2, name: 'Sports', ko: '스포츠', tags: ['sports', 'esports'] },
+  { id: 2, name: 'Sports', ko: '스포츠', tags: ['sports', 'esports'],
+    // picked round-robin in this order (international soccer first and twice per cycle); club soccer only from top-flight tags
+    buckets: [
+      { key: 'soccer-intl', tags: ['uefa-nations-league', 'intlpt-soccer', 'international-friendlies', 'world-cup-qualifiers', 'fifa-world-cup-qualifiers'] },
+      { key: 'nfl', tags: ['nfl'] },
+      { key: 'soccer-intl', tags: ['uefa-nations-league', 'intlpt-soccer', 'international-friendlies', 'world-cup-qualifiers', 'fifa-world-cup-qualifiers'] },
+      { key: 'mlb', tags: ['mlb', 'world-series'] },
+      { key: 'soccer-top', tags: ['EPL', 'la-liga', 'bundesliga', 'serie-a', 'ligue-1', 'champions-league'] },
+      { key: 'nba', tags: ['nba'] },
+      { key: 'other', tags: ['nhl', 'ufc', 'f1'] },
+    ],
+    exclude: /exact score|any other score|o\/u|over\/under|assists|rebounds|points o|completed match|halftime|corners|cards/i,
+    priceBand: [0.1, 0.9] }, // skip long shots / near-certain picks
   { id: 3, name: 'Crypto', ko: '크립토', tags: ['crypto'] },
   { id: 4, name: 'Economics', ko: '경제', tags: ['economy', 'business', 'finance', 'economics'] },
   { id: 5, name: 'Culture', ko: '문화', tags: ['pop-culture', 'music', 'movies'] },
@@ -35,7 +47,7 @@ export const categoryByName = (name) => CATEGORIES.find((c) => c.name.toLowerCas
 
 // Defaults; anything under `settings` can be overridden at runtime from the dashboard (state/settings.json).
 export const DEFAULT_SETTINGS = {
-  categoryTargets: { Politics: 10, Sports: 10, Crypto: 10, Economics: 10, Culture: 5, Science: 5, Social: 5, Other: 5 },
+  categoryTargets: { Politics: 10, Sports: 15, Crypto: 12, Economics: 12, Culture: 8, Science: 7, Social: 8, Other: 8 }, // 80 markets
   agents: { funding: true, creator: true, trader: true, oddsSync: true, resolver: true, reporter: true },
   creator: { cron: '0 */6 * * *', endDateMinDays: 3, endDateMaxDays: 90, maxCreatePerRun: 12, pauseMs: 4000,
     // which creator wallet owns (creates + resolves) each category; unlisted categories go to CREATOR
