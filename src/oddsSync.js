@@ -4,7 +4,7 @@ import path from 'node:path';
 import { CONFIG, PATHS } from './config.js';
 import { traderWallets } from './wallets.js';
 import * as pq from './client/polyquest.js';
-import { LsLmsr, modelFromState, spendToReachPrice } from './lslmsr.js';
+import { LsLmsr, spendToReachPrice } from './lslmsr.js';
 import { readMarket } from './chain/read.js';
 import { yesProbability } from './polymarket.js';
 import { withLock } from './locks.js';
@@ -28,10 +28,12 @@ export function planMove({ p, pStar, model, band, maxMove, maxSpend, walletsMin,
   return { skip: false, outcome: i === 0 ? 'YES' : 'NO', i, spend, target: round(target, 4), expectedAfter: round(i === 0 ? r.priceAfter : 1 - r.priceAfter, 4), capped: r.capped, chunks, delta };
 }
 
-/** LS-LMSR model for a quest: backend `quest.lslmsrState`, or the on-chain market account (read-only) when the backend returns null. */
+/**
+ * LS-LMSR model for a quest from the on-chain market account (read-only). The site's displayed odds match the chain;
+ * backend `quest.lslmsrState` was null for weeks and, once it returned data, carried shares inflated by the duplicated
+ * betting rows (bug 2), so it is not used for planning trades.
+ */
 export async function marketModel(questId) {
-  const st = await pq.lslmsrState(questId).catch(() => null);
-  if (st?.marketState) return modelFromState(st.marketState);
   const m = await readMarket(questId); if (!m) throw new Error('market account not found');
   return new LsLmsr({ alpha: m.alpha, q: m.q });
 }
