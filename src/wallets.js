@@ -60,6 +60,9 @@ export function allWallets() {
   return walletIndices().map((i) => { const kp = wallet(i); return { index: i, ...roleOf(i), kp, address: kp.publicKey.toBase58() }; });
 }
 export const traderWallets = () => allWallets().filter((w) => w.role === 'TRADER');
+/** CREATOR-role keypair by label ('CREATOR' | 'CREATOR-02'); unknown labels fall back to CREATOR. */
+export const creatorByLabel = (label) => (label === roleOf(CREATOR2_INDEX).label ? CREATOR2() : CREATOR());
+export const creatorLabels = () => [roleOf(CREATOR_INDEX).label, roleOf(CREATOR2_INDEX).label];
 
 /** Address table only (no secrets) — what state/addresses.json contains. */
 export function deriveAddresses(mnemonic = assertMnemonic(), indices = walletIndices()) {

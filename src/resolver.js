@@ -1,10 +1,10 @@
-// Daily resolution check: Polymarket resolved → quest.updateStatus SUCCESS(finalAnswerId) / REVOKE via the CREATOR session.
+// Daily resolution check: Polymarket resolved → quest.updateStatus SUCCESS(finalAnswerId) / REVOKE via the market creator's session.
 // NEVER resolves on-chain directly (lesson B6-11). Admin session is only a fallback if the platform denies the creator.
 import bs58 from 'bs58';
 import { Keypair } from '@solana/web3.js';
 import path from 'node:path';
 import { CONFIG, PATHS } from './config.js';
-import { CREATOR } from './wallets.js';
+import { creatorByLabel } from './wallets.js';
 import * as pq from './client/polyquest.js';
 import { marketById as pmMarket, resolutionOf } from './polymarket.js';
 import { allMarkets, patchMarket, marketById } from './state.js';
@@ -14,7 +14,7 @@ const log = createLogger('resolver');
 const REPORT = path.join(PATHS.reports, 'resolver.jsonl');
 
 async function doUpdate(questId, status, finalAnswerId) {
-  const kp = CREATOR();
+  const kp = creatorByLabel(marketById(questId)?.creator); // the wallet that created the quest
   try { return await pq.sessions.withSession(kp, (sess) => pq.updateStatus(sess, questId, status, finalAnswerId)); }
   catch (e) {
     const denied = e?.code === 'FORBIDDEN' || e?.code === 'UNAUTHORIZED';

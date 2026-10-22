@@ -37,7 +37,9 @@ export const categoryByName = (name) => CATEGORIES.find((c) => c.name.toLowerCas
 export const DEFAULT_SETTINGS = {
   categoryTargets: { Politics: 10, Sports: 10, Crypto: 10, Economics: 10, Culture: 5, Science: 5, Social: 5, Other: 5 },
   agents: { funding: true, creator: true, trader: true, oddsSync: true, resolver: true, reporter: true },
-  creator: { cron: '0 */6 * * *', endDateMinDays: 3, endDateMaxDays: 90, maxCreatePerRun: 12, pauseMs: 4000 },
+  creator: { cron: '0 */6 * * *', endDateMinDays: 3, endDateMaxDays: 90, maxCreatePerRun: 12, pauseMs: 4000,
+    // which creator wallet owns (creates + resolves) each category; unlisted categories go to CREATOR
+    assign: { CREATOR: ['Politics', 'Economics', 'Crypto', 'Science'], 'CREATOR-02': ['Sports', 'Culture', 'Social', 'Other'] } },
   trader: { tradesPerHourPerMarket: num('TRADES_PER_HOUR_PER_MARKET', 24), base: [20, 120], flux: [300, 700], fluxP: 0.15, buyBias: 0.52, band: 0.05, snapEvery: 15, reloginEvery: 120, minTickMs: 2500 },
   oddsSync: { cron: env('ODDS_SYNC_CRON', '7 * * * *'), band: num('ODDS_BAND', 0.02), maxMove: num('MAX_MOVE_PER_SYNC', 0.08), maxSpend: num('ODDS_MAX_SPEND', 3000), walletsMin: 2, walletsMax: 4, pauseMs: 2000 },
   funding: { cron: '*/30 * * * *', solMin: num('SOL_MIN', 0.03), solTopup: num('SOL_TOPUP', 0.04), usdpMin: num('USDP_MIN', 500), usdpTopup: num('USDP_TOPUP', 5000), traderSolInit: 0.08, traderUsdpInit: 50000, creatorSolInit: 0.3, creatorUsdpInit: 900000, funderSolReserve: 0.2 },

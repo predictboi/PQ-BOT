@@ -1,6 +1,7 @@
 // CREATOR bot: keep each category at its target number of live markets, create via the user flow, keep markets.json in sync.
+// Each category is owned by one creator wallet (settings.creator.assign); that wallet creates and resolves its markets.
 import { CONFIG, CATEGORIES, categoryById } from './config.js';
-import { CREATOR } from './wallets.js';
+import { creatorByLabel, creatorLabels } from './wallets.js';
 import * as pq from './client/polyquest.js';
 import { thumbnailFor } from './images.js';
 import { pickTopics, manualTopics } from './research.js';
@@ -13,33 +14,43 @@ import { PATHS } from './config.js';
 const log = createLogger('creator');
 const REPORT = path.join(PATHS.reports, 'creator.jsonl');
 
-/** Login as CREATOR and read the platform role (USER until promoted in /admin). */
-export async function creatorStatus() {
-  const kp = CREATOR(); const sess = await pq.sessions.get(kp); const info = await pq.sessionInfo(sess);
+/** Creator label that owns a category (settings.creator.assign), default CREATOR. */
+export function ownerOf(categoryName) {
+  const assign = getSettings().creator.assign || {};
+  for (const [label, cats] of Object.entries(assign)) if ((cats || []).some((c) => String(c).toLowerCase() === String(categoryName).toLowerCase())) return label;
+  return 'CREATOR';
+}
+
+/** Login as a creator wallet and read the platform role (USER until promoted in /admin). */
+export async function creatorStatus(label = 'CREATOR') {
+  const kp = creatorByLabel(label); const sess = await pq.sessions.get(kp); const info = await pq.sessionInfo(sess);
   const role = info?.user?.role || 'USER';
-  return { address: kp.publicKey.toBase58(), role, promoted: role === 'CREATOR' || role === 'ADMIN', email: info?.user?.email || null };
+  return { label, address: kp.publicKey.toBase58(), role, promoted: role === 'CREATOR' || role === 'ADMIN', email: info?.user?.email || null };
 }
 
 const pmFromLink = (link) => { const m = /polymarket\.com\/event\/([^/]+)\/([^/?#]+)/.exec(link || ''); return m ? { eventSlug: m[1], slug: m[2] } : null; };
 
-/** Pull every quest created by CREATOR from the platform and merge into markets.json (status, endDate, answers). */
+/** Pull every quest created by the creator wallets from the platform and merge into markets.json (status, endDate, answers). */
 export async function syncFromPlatform() {
-  const kp = CREATOR(); const addr = kp.publicKey.toBase58();
-  const quests = await pq.sessions.withSession(kp, (sess) => pq.allQuestsByWallet(sess, addr));
-  let added = 0, updated = 0, recovered = 0;
-  for (const q of quests) {
-    if (q.type !== 'LSLMSR') continue;
-    const answers = (q.answers || []).map((a) => ({ id: a.id, title: a.title }));
-    const yes = answers.find((a) => /^(예|yes)$/i.test(a.title)) || answers[0], no = answers.find((a) => /^(아니오|no)$/i.test(a.title)) || answers[1];
-    const existing = marketById(q.id);
-    const rec = { questId: q.id, title: q.title, categoryId: q.categoryId, category: q.category?.name || categoryById(q.categoryId)?.name || null, answers, yesAnswerId: yes?.id, noAnswerId: no?.id, endDate: q.endDate, status: q.status, finalAnswerId: q.finalAnswerId ?? null, totalAmount: Number(q.totalAmount || 0), imageUrl: q.imageUrl, relevantLink: q.relevantLink, percent: (q.answers || []).map((a) => a.percent), platformUpdatedAt: q.updatedAt };
-    if (!existing) { rec.createdAt = q.createdAt; rec.polymarket = null; const pm = pmFromLink(q.relevantLink); if (pm) rec.polymarket = { ...pm, recoveredFromLink: true, id: null, tokenIds: [] }; added++; }
-    else updated++;
-    const pmRef = rec.polymarket || existing?.polymarket;
-    if (pmRef && !pmRef.id && pmRef.slug) { try { const g = await marketBySlug(pmRef.slug); if (g) { rec.polymarket = { id: g.id, conditionId: g.conditionId, slug: g.slug, eventSlug: g.eventSlug || pmRef.eventSlug, question: g.question, tokenIds: g.tokenIds, url: g.url, recovered: true }; recovered++; } } catch { /* keep slug-only mapping */ } }
-    upsertMarket(rec);
+  let total = 0, added = 0, updated = 0, recovered = 0;
+  for (const label of creatorLabels()) {
+    const kp = creatorByLabel(label); const addr = kp.publicKey.toBase58();
+    const quests = await pq.sessions.withSession(kp, (sess) => pq.allQuestsByWallet(sess, addr));
+    total += quests.length;
+    for (const q of quests) {
+      if (q.type !== 'LSLMSR') continue;
+      const answers = (q.answers || []).map((a) => ({ id: a.id, title: a.title }));
+      const yes = answers.find((a) => /^(예|yes)$/i.test(a.title)) || answers[0], no = answers.find((a) => /^(아니오|no)$/i.test(a.title)) || answers[1];
+      const existing = marketById(q.id);
+      const rec = { questId: q.id, creator: label, title: q.title, categoryId: q.categoryId, category: q.category?.name || categoryById(q.categoryId)?.name || null, answers, yesAnswerId: yes?.id, noAnswerId: no?.id, endDate: q.endDate, status: q.status, finalAnswerId: q.finalAnswerId ?? null, totalAmount: Number(q.totalAmount || 0), imageUrl: q.imageUrl, relevantLink: q.relevantLink, percent: (q.answers || []).map((a) => a.percent), platformUpdatedAt: q.updatedAt };
+      if (!existing) { rec.createdAt = q.createdAt; rec.polymarket = null; const pm = pmFromLink(q.relevantLink); if (pm) rec.polymarket = { ...pm, recoveredFromLink: true, id: null, tokenIds: [] }; added++; }
+      else updated++;
+      const pmRef = rec.polymarket || existing?.polymarket;
+      if (pmRef && !pmRef.id && pmRef.slug) { try { const g = await marketBySlug(pmRef.slug); if (g) { rec.polymarket = { id: g.id, conditionId: g.conditionId, slug: g.slug, eventSlug: g.eventSlug || pmRef.eventSlug, question: g.question, tokenIds: g.tokenIds, url: g.url, recovered: true }; recovered++; } } catch { /* keep slug-only mapping */ } }
+      upsertMarket(rec);
+    }
   }
-  return { total: quests.length, added, updated, recovered };
+  return { total, added, updated, recovered };
 }
 
 export function liveCountByCategory() {
@@ -53,9 +64,9 @@ export function shortfall() {
   return out;
 }
 
-/** Create one market from a spec via the user flow; returns the stored market record. */
-export async function createFromSpec(spec) {
-  const kp = CREATOR(); const sess = await pq.sessions.get(kp);
+/** Create one market from a spec via the user flow with the category's owner wallet; returns the stored market record. */
+export async function createFromSpec(spec, label = ownerOf(spec.category)) {
+  const kp = creatorByLabel(label); const sess = await pq.sessions.get(kp);
   const img = await thumbnailFor(spec);
   const res = await pq.createMarket(sess, kp, { ...spec, imageUrl: img.url, seed: CONFIG.market.seed, alpha: CONFIG.market.alpha });
   if (res.dryRun) return { dryRun: true, spec };
@@ -63,10 +74,10 @@ export async function createFromSpec(spec) {
   let det = null; try { det = await pq.questDetail(res.questId); } catch { /* read later */ }
   const answers = (det?.answers || res.answers || []).map((a) => ({ id: a.id, title: a.title }));
   const yes = answers.find((a) => /^(예|yes)$/i.test(a.title)) || answers[0], no = answers.find((a) => /^(아니오|no)$/i.test(a.title)) || answers[1];
-  const rec = { questId: res.questId, title: spec.title, categoryId: spec.categoryId, category: spec.category, answers, yesAnswerId: yes?.id, noAnswerId: no?.id, endDate: spec.endDateISO, status: det?.status || 'APPROVED', createdAt: new Date().toISOString(), polymarket: spec.polymarket, manual: spec.manual || null, openingRatios: spec.openingRatios, imageUrl: det?.imageUrl || img.url, relevantLink: spec.relevantLink, thumbSource: img.source };
+  const rec = { questId: res.questId, creator: label, title: spec.title, categoryId: spec.categoryId, category: spec.category, answers, yesAnswerId: yes?.id, noAnswerId: no?.id, endDate: spec.endDateISO, status: det?.status || 'APPROVED', createdAt: new Date().toISOString(), polymarket: spec.polymarket, manual: spec.manual || null, openingRatios: spec.openingRatios, imageUrl: det?.imageUrl || img.url, relevantLink: spec.relevantLink, thumbSource: img.source };
   upsertMarket(rec);
-  appendJsonl(REPORT, { t: new Date().toISOString(), event: 'created', questId: res.questId, title: spec.title, category: spec.category, openingRatios: spec.openingRatios, pm: spec.polymarket?.slug || null });
-  log.info(`created quest ${res.questId} [${spec.category}] ${spec.title} (${spec.openingRatios.join('/')})`);
+  appendJsonl(REPORT, { t: new Date().toISOString(), event: 'created', questId: res.questId, creator: label, title: spec.title, category: spec.category, openingRatios: spec.openingRatios, pm: spec.polymarket?.slug || null });
+  log.info(`created quest ${res.questId} by ${label} [${spec.category}] ${spec.title} (${spec.openingRatios.join('/')})`);
   return rec;
 }
 
@@ -74,18 +85,20 @@ export async function createFromSpec(spec) {
 export async function replenish({ maxCreate } = {}) {
   const s = getSettings().creator; const limit = maxCreate ?? s.maxCreatePerRun;
   const sync = await syncFromPlatform().catch((e) => ({ error: e.message }));
-  const st = await creatorStatus();
-  if (!st.promoted) { log.warn(`CREATOR ${st.address} role=${st.role} — not promoted yet; skipping creation`); return { sync, creator: st, created: [], failed: [], skipped: 'not-promoted', shortfall: shortfall() };
-  }
+  const creators = {};
+  for (const label of creatorLabels()) { try { creators[label] = await creatorStatus(label); } catch (e) { creators[label] = { label, promoted: false, error: e.message.slice(0, 120) }; } }
+  const ready = (label) => creators[label]?.promoted;
+  if (!Object.values(creators).some((c) => c.promoted)) { log.warn('no promoted creator wallet; skipping creation'); return { sync, creators, created: [], failed: [], skipped: 'not-promoted', shortfall: shortfall() }; }
   const created = [], failed = []; let budget = limit;
-  for (const spec of manualTopics()) { if (budget <= 0) break; try { created.push(await createFromSpec(spec)); budget--; await sleep(s.pauseMs); } catch (e) { failed.push({ title: spec.title, error: e.message.slice(0, 160) }); } }
+  for (const spec of manualTopics()) { if (budget <= 0) break; const label = ownerOf(spec.category); if (!ready(label)) continue; try { created.push(await createFromSpec(spec, label)); budget--; await sleep(s.pauseMs); } catch (e) { failed.push({ title: spec.title, error: e.message.slice(0, 160) }); } }
   for (const c of CATEGORIES) {
     if (budget <= 0) break;
     const { need } = shortfall()[c.name]; if (need <= 0) continue;
+    const label = ownerOf(c.name); if (!ready(label)) { failed.push({ category: c.name, error: `${label} not promoted` }); continue; }
     let specs = []; try { specs = await pickTopics(c.id, Math.min(need, budget), { minDays: s.endDateMinDays, maxDays: s.endDateMaxDays }); } catch (e) { failed.push({ category: c.name, error: `research: ${e.message.slice(0, 120)}` }); continue; }
-    for (const spec of specs) { if (budget <= 0) break; try { created.push(await createFromSpec(spec)); budget--; await sleep(s.pauseMs); } catch (e) { failed.push({ title: spec.title, category: c.name, error: e.message.slice(0, 160) }); log.error('create failed:', spec.title, e.message.slice(0, 160)); } }
+    for (const spec of specs) { if (budget <= 0) break; try { created.push(await createFromSpec(spec, label)); budget--; await sleep(s.pauseMs); } catch (e) { failed.push({ title: spec.title, category: c.name, error: e.message.slice(0, 160) }); log.error('create failed:', spec.title, e.message.slice(0, 160)); } }
   }
-  return { sync, creator: st, created: created.map((m) => ({ questId: m.questId, title: m.title, category: m.category })), failed, shortfall: shortfall() };
+  return { sync, creators, created: created.map((m) => ({ questId: m.questId, creator: m.creator, title: m.title, category: m.category })), failed, shortfall: shortfall() };
 }
 
 /** Refresh status/percent for all local markets from the platform (cheap; used by reporter/trader). */
