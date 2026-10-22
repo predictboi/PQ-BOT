@@ -64,20 +64,27 @@ export function shortfall() {
   return out;
 }
 
+/** Random seed in settings.creator.seedRange (rounded to 100 USDP). */
+export function pickSeed(range = getSettings().creator.seedRange, rnd = Math.random) {
+  const [lo, hi] = Array.isArray(range) && range.length === 2 ? range.map(Number) : [Number(CONFIG.market.seed), Number(CONFIG.market.seed)];
+  return Math.round((lo + rnd() * (hi - lo)) / 100) * 100;
+}
+
 /** Create one market from a spec via the user flow with the category's owner wallet; returns the stored market record. */
 export async function createFromSpec(spec, label = ownerOf(spec.category)) {
   const kp = creatorByLabel(label); const sess = await pq.sessions.get(kp);
   const img = await thumbnailFor(spec);
-  const res = await pq.createMarket(sess, kp, { ...spec, imageUrl: img.url, seed: CONFIG.market.seed, alpha: CONFIG.market.alpha });
+  const seed = pickSeed();
+  const res = await pq.createMarket(sess, kp, { ...spec, imageUrl: img.url, seed: String(seed), alpha: CONFIG.market.alpha });
   if (res.dryRun) return { dryRun: true, spec };
   await sleep(3000);
   let det = null; try { det = await pq.questDetail(res.questId); } catch { /* read later */ }
   const answers = (det?.answers || res.answers || []).map((a) => ({ id: a.id, title: a.title }));
   const yes = answers.find((a) => /^(예|yes)$/i.test(a.title)) || answers[0], no = answers.find((a) => /^(아니오|no)$/i.test(a.title)) || answers[1];
-  const rec = { questId: res.questId, creator: label, title: spec.title, categoryId: spec.categoryId, category: spec.category, answers, yesAnswerId: yes?.id, noAnswerId: no?.id, endDate: spec.endDateISO, status: det?.status || 'APPROVED', createdAt: new Date().toISOString(), polymarket: spec.polymarket, manual: spec.manual || null, openingRatios: spec.openingRatios, imageUrl: det?.imageUrl || img.url, relevantLink: spec.relevantLink, thumbSource: img.source };
+  const rec = { questId: res.questId, creator: label, seed, title: spec.title, categoryId: spec.categoryId, category: spec.category, answers, yesAnswerId: yes?.id, noAnswerId: no?.id, endDate: spec.endDateISO, status: det?.status || 'APPROVED', createdAt: new Date().toISOString(), polymarket: spec.polymarket, manual: spec.manual || null, openingRatios: spec.openingRatios, imageUrl: det?.imageUrl || img.url, relevantLink: spec.relevantLink, thumbSource: img.source };
   upsertMarket(rec);
-  appendJsonl(REPORT, { t: new Date().toISOString(), event: 'created', questId: res.questId, creator: label, title: spec.title, category: spec.category, openingRatios: spec.openingRatios, pm: spec.polymarket?.slug || null });
-  log.info(`created quest ${res.questId} by ${label} [${spec.category}] ${spec.title} (${spec.openingRatios.join('/')})`);
+  appendJsonl(REPORT, { t: new Date().toISOString(), event: 'created', questId: res.questId, creator: label, seed, title: spec.title, category: spec.category, openingRatios: spec.openingRatios, pm: spec.polymarket?.slug || null });
+  log.info(`created quest ${res.questId} by ${label} seed ${seed} [${spec.category}] ${spec.title} (${spec.openingRatios.join('/')})`);
   return rec;
 }
 
