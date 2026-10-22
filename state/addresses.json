@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-20T04:06:40.915Z",
+  "generatedAt": "2026-10-22T03:59:01.753Z",
   "derivation": "m/44'/501'/{index}'/0'",
   "wallets": [
     {
@@ -193,6 +193,12 @@
       "role": "TRADER",
       "label": "TRADER-30",
       "address": "BEWmaRZeGNW11HtJJJjhgK6Mxo9wXUDcQsPvtiAH9idA"
+    },
+    {
+      "index": 32,
+      "role": "CREATOR",
+      "label": "CREATOR-02",
+      "address": "DvmvKHi9W9j3qbhmq5Pvh1TZnd1ko9mE7XdEyh625ra8"
     }
   ]
 }

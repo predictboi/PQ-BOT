@@ -74,11 +74,11 @@ export async function execute(p, { pauseMs = 1500 } = {}) {
 export async function distributeInitial(opts = {}) { const rows = await refreshBalances(); const p = plan(rows, 'initial', opts); const r = await execute(p); await refreshBalances(); return { plan: p, ...r }; }
 export async function topUp() { const rows = await refreshBalances(); const p = plan(rows, 'topup'); if (!p.transfers.length) return { plan: p, done: [], failed: [] }; const r = await execute(p); if (r.done.length) await refreshBalances(); return { plan: p, ...r }; }
 
-/** Sweep USDP (and SOL above a small reserve) from traders (+creator) back to FUNDER. */
+/** Sweep USDP (and SOL above a small reserve) from traders (+creators) back to FUNDER. */
 export async function sweep({ includeCreator = false, solReserve = 0.01 } = {}) {
   const rows = await refreshBalances(); const funderAddr = rows.find((w) => w.index === FUNDER_INDEX)?.address; const done = [], failed = [];
   for (const w of allWallets()) {
-    if (w.index === FUNDER_INDEX || (w.index === CREATOR_INDEX && !includeCreator)) continue;
+    if (w.index === FUNDER_INDEX || (w.role === 'CREATOR' && !includeCreator)) continue;
     const b = rows.find((r) => r.index === w.index); if (!b) continue;
     try {
       if (b.usdp >= 1) { await transferUsdp(w.kp, funderAddr, Math.floor(b.usdp * 100) / 100); done.push({ from: w.label, kind: 'USDP', amount: b.usdp }); await sleep(1200); }
