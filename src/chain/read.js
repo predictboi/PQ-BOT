@@ -64,9 +64,9 @@ export function decodeAccount(data) {
   throw new Error('unknown LMSR account discriminator ' + disc);
 }
 
-/** Read a market's on-chain q/alpha (finalized) → { q:[...], alpha, is_resolved, is_void, winning_outcome } or null if no account. */
+/** Read a market's on-chain q/alpha (confirmed, so a just-landed trade is visible) → { q:[...], alpha, is_resolved, is_void, winning_outcome } or null if no account. */
 export async function readMarket(questId) {
-  const info = await withTimeout(connection().getAccountInfo(marketPda(questionId(questId)), 'finalized'), CONFIG.timeouts.rpc, 'getAccountInfo');
+  const info = await withTimeout(connection().getAccountInfo(marketPda(questionId(questId)), 'confirmed'), CONFIG.timeouts.rpc, 'getAccountInfo');
   if (!info) return null;
   const m = decodeAccount(info.data);
   return { q: m.outcome_shares_wad.map((w) => Number(w.toString()) / 1e18), alpha: Number(m.alpha_wad.toString()) / 1e18, is_resolved: m.is_resolved, is_void: m.is_void, winning_outcome: m.winning_outcome, is_paused: m.is_paused };
