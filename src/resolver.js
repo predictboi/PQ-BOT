@@ -9,7 +9,8 @@ import * as pq from './client/polyquest.js';
 import { marketById as pmMarket, resolutionOf } from './polymarket.js';
 import { allMarkets, patchMarket, marketById } from './state.js';
 import { createLogger, appendJsonl, sleep } from './util.js';
-import { claimAll } from './claims.js';
+import { claimAll, claimCreatorFee } from './claims.js';
+import { readMarket } from './chain/read.js';
 
 const log = createLogger('resolver');
 const REPORT = path.join(PATHS.reports, 'resolver.jsonl');
@@ -41,6 +42,9 @@ export async function resolveMarket(questId, winner, { reason = 'manual' } = {})
   // winners claim right after resolution (user flow); anything that fails here is retried by checkAll's sweep
   await sleep(5000);
   try { const c = await claimAll({ questIds: [questId] }); log.info(`quest ${questId} claims: ${c.claimed.length} ok / ${c.failed.length} failed`); } catch (e) { log.warn(`quest ${questId} claims deferred:`, e.message.slice(0, 120)); }
+  // then the creator's trading fee (markets made with creatorFeePercent 0 have none)
+  // (the fee is the on-chain creator_fee_bps cut accrued per trade; the quest's creatorFeePercent field is legacy and reads 0)
+  try { const ch = await readMarket(questId); if (ch?.accruedCreatorFee > 0) { await claimCreatorFee(creatorByLabel(m.creator), questId); log.info(`quest ${questId} creator fee claimed (${ch.accruedCreatorFee} USDP)`); } } catch (e) { log.warn(`quest ${questId} creator fee deferred:`, e.message.slice(0, 120)); }
   return r;
 }
 
