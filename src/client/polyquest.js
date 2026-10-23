@@ -137,14 +137,21 @@ export async function createMarket(sess, kp, q) {
 }
 
 // ---- bets: betting.draftLslmsr → sign → betting.confirm / betting.confirmSell (+ read-back verification) ----
-export async function verifyBetLanded(sess, addr, bettingId, { tries = 4, delayMs = 2500 } = {}) {
+export async function verifyBetLanded(sess, addr, bettingId, { tries = 4, delayMs = 2500, expect = null } = {}) {
   if (bettingId === undefined || bettingId === null) return { landed: false, reason: 'no-id' };
   for (let a = 0; a < tries; a++) {
     try {
       const r = await betsByWallet(sess, addr, { pageSize: 30 });
       const list = r?.data ?? r; const arr = Array.isArray(list) ? list : (list?.items ?? list?.bettings ?? []);
       const rec = arr.find((b) => b.id === bettingId);
-      if (rec) { if (rec.isValid === false) return { landed: false, reason: 'invalid', rec }; if (rec.bettingTxn) return { landed: true, txn: rec.bettingTxn, rec }; }
+      if (rec?.bettingTxn && rec.isValid !== false) return { landed: true, txn: rec.bettingTxn, rec };
+      // backend race: the on-chain indexer records the trade as its own row (source ACTIONS) and voids our draft row
+      // (listByWallet then hides it) while betting.confirm answers 500 — the twin row right after the draft is the fill
+      const want = expect || rec;
+      if (want && (!rec || rec.isValid === false)) {
+        const twin = arr.find((b) => b.id > bettingId && b.id <= bettingId + 5 && b.isValid !== false && b.bettingTxn && Number(b.questId) === Number(want.questId) && Number(b.answerId) === Number(want.answerId) && b.kind === want.kind && Math.abs(Number(b.spent) - Number(want.spent)) < 0.01);
+        if (twin) return { landed: true, txn: twin.bettingTxn, rec: twin, viaTwin: true };
+      }
     } catch { /* transient */ }
     if (a < tries - 1) await sleep(delayMs);
   }
@@ -164,7 +171,7 @@ export async function trade(sess, kp, { questId, answerId, spent, kind = 'BUY', 
     const c = peel(await withTimeout(trpc(sess, proc, { bettingId, signedTx }), T.trade, proc));
     return { betting: d.betting, confirm: c, verified: false };
   } catch (e) {
-    const v = await verifyBetLanded(sess, kp.publicKey.toBase58(), bettingId); // confirm false-negatives are common
+    const v = await verifyBetLanded(sess, kp.publicKey.toBase58(), bettingId, { expect: input }); // confirm false-negatives are common
     if (v.landed) return { betting: d.betting, confirm: null, verified: true, bettingTxn: v.txn };
     const err = new Error(`${proc}: ${(e.message || '').slice(0, 100)} | verify:${v.reason}`); err.confirmError = e; throw err;
   }
