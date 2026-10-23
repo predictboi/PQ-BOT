@@ -64,6 +64,7 @@ export const DEFAULT_SETTINGS = {
 
 export const CONFIG = {
   apiBase: env('POLYQUEST_API_BASE', 'https://solana-stg.polyquest.xyz').replace(/\/$/, ''),
+  webBase: env('POLYQUEST_WEB_BASE', 'https://polyquest.xyz').replace(/\/$/, ''), // market links: {webBase}/quests/{id}
   rpcUrl: env('RPC_URL', 'https://api.mainnet-beta.solana.com'),
   rpcIsFallback: !env('RPC_URL'),
   programId: env('LSLMSR_PROGRAM_ID', '4tjbrvyzZ4PVuCnLKhrbbpcKd4ghnT6xxWPLQ2Mav68z'),
