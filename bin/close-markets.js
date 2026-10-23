@@ -33,6 +33,10 @@ for (const m of markets) {
   for (const w of wallets.filter((x) => holders.has(x.address))) { try { await closePosition(w, m.questId); rec.steps.push({ closedPosition: w.label }); } catch (e) { rec.steps.push({ closePositionError: `${w.label}: ${e.message.slice(0, 100)}` }); } await sleep(1500); }
   await sleep(4000); ch = await readMarket(m.questId);
   if (ch.openPositions > 0 || ch.accruedCreatorFee > 0 || ch.accruedPlatformFee > 0) { rec.result = { blocked: true, openPositions: ch.openPositions, creatorFee: ch.accruedCreatorFee, platformFee: ch.accruedPlatformFee }; continue; }
-  try { const admin = await pq.sessions.get(adminKp); await pq.trpc(admin, 'quest.closeLslmsrMarket', m.questId); rec.result = 'closed'; } catch (e) { rec.result = { closeError: e.message.slice(0, 160) }; }
+  // right after the last position closes the backend can still simulate against the old state — retry with a pause
+  for (let t = 0; t < 3 && rec.result == null; t++) {
+    try { const admin = await pq.sessions.get(adminKp); await pq.trpc(admin, 'quest.closeLslmsrMarket', m.questId); rec.result = 'closed'; }
+    catch (e) { if (t === 2) rec.result = { closeError: e.message.slice(0, 160) }; else await sleep(10000); }
+  }
 }
 pj(out); process.exit(0);
