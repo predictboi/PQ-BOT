@@ -54,8 +54,9 @@ export const DEFAULT_SETTINGS = {
     assign: { CREATOR: ['Politics', 'Economics', 'Crypto', 'Science'], 'CREATOR-02': ['Sports', 'Culture', 'Social', 'Other'] },
     // seed (USDP) per new market, drawn uniformly from [min, max] and rounded to 100; markets made before this use 15,000
     seedRange: [40000, 70000] },
-  trader: { tradesPerHourPerMarket: num('TRADES_PER_HOUR_PER_MARKET', 24), base: [20, 120], flux: [300, 700], fluxP: 0.15, buyBias: 0.52, band: 0.05, snapEvery: 15, reloginEvery: 120, minTickMs: 2500 },
-  oddsSync: { cron: env('ODDS_SYNC_CRON', '7 * * * *'), band: num('ODDS_BAND', 0.02), maxMove: num('MAX_MOVE_PER_SYNC', 0.08), maxSpend: num('ODDS_MAX_SPEND', 3000), walletsMin: 2, walletsMax: 4, pauseMs: 2000 },
+  // organic trader (src/organic.js): ~tradesPerDay Poisson arrivals shaped by the UTC hour curve, persona wallets on favorite markets
+  trader: { tradesPerDay: num('TRADES_PER_DAY', 800), weekendFactor: 0.8, burstP: 0.06, band: 0.05, sellP: 0.3, minHoldMin: 120, followMove: 0.03, maxBuyFrac: 0.15, snapMin: 10, minGapMs: 4000 },
+  oddsSync: { cron: env('ODDS_SYNC_CRON', '7 * * * *'), band: num('ODDS_BAND', 0.02), maxMove: num('MAX_MOVE_PER_SYNC', 0.08), maxSpend: num('ODDS_MAX_SPEND', 3000), walletsMin: 2, walletsMax: 4, pauseMs: 2000, chunkJitterMs: 60000, spreadMin: 40 },
   funding: { cron: '*/30 * * * *', solMin: num('SOL_MIN', 0.03), solTopup: num('SOL_TOPUP', 0.04), usdpMin: num('USDP_MIN', 500), usdpTopup: num('USDP_TOPUP', 5000), traderSolInit: 0.08, traderUsdpInit: 50000, creatorSolInit: 0.3, creatorUsdpInit: 900000, funderSolReserve: 0.2 },
   resolver: { cron: '30 0 * * *' },
   reporter: { cron: '3 * * * *' },

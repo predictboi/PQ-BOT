@@ -21,7 +21,7 @@ export function buildAgents() {
     creator: new Agent({ name: 'creator', title: '크리에이터 에이전트', description: '카테고리별 목표 수만큼 Polymarket 기반 마켓 생성 (6시간마다, 유저 플로우)', cron: () => S().creator.cron, enabled: on('creator'),
       run: async ({ params }) => { if (!hasMnemonic()) throw new Error('MNEMONIC not set'); if (params?.mode === 'sync') return { sync: await creator.syncFromPlatform(), shortfall: creator.shortfall() }; return creator.replenish({ maxCreate: params?.maxCreate }); },
       summarize: (r) => ({ created: r.created?.length ?? 0, failed: r.failed?.length ?? 0, skipped: r.skipped || null, roles: r.creators ? Object.fromEntries(Object.entries(r.creators).map(([k, c]) => [k, c.role || null])) : null, sync: r.sync, need: Object.values(r.shortfall || {}).reduce((a, x) => a + x.need, 0) }) }),
-    trader: new Agent({ name: 'trader', title: '트레이딩 에이전트', description: '30개 지갑 라운드로빈 볼륨 거래 (상시 루프, p* ± 밴드 유지)', loop: true, enabled: on('trader'),
+    trader: new Agent({ name: 'trader', title: '트레이딩 에이전트', description: '오가닉 거래: 페르소나 지갑 · 관심 마켓 · 시간대 곡선 · 사람 같은 주문 크기 (상시 루프, p* ± 밴드 유지)', loop: true, enabled: on('trader'),
       run: async ({ shouldStop }) => { if (!hasMnemonic()) throw new Error('MNEMONIC not set'); await trader.run({ shouldStop }); return trader.stats; } }),
     oddsSync: new Agent({ name: 'oddsSync', title: '오즈 싱크 에이전트', description: '매시 Polymarket odds와 LS-LMSR 가격 비교 → 트레이더 지갑으로 보정 매수', cron: () => S().oddsSync.cron, enabled: on('oddsSync'),
       run: async () => { if (!hasMnemonic()) throw new Error('MNEMONIC not set'); return syncAll(); },
