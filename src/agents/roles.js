@@ -26,9 +26,9 @@ export function buildAgents() {
     oddsSync: new Agent({ name: 'oddsSync', title: '오즈 싱크 에이전트', description: '매시 Polymarket odds와 LS-LMSR 가격 비교 → 트레이더 지갑으로 보정 매수', cron: () => S().oddsSync.cron, enabled: on('oddsSync'),
       run: async () => { if (!hasMnemonic()) throw new Error('MNEMONIC not set'); return syncAll(); },
       summarize: (r) => ({ markets: r.markets, inBand: r.inBand, moved: r.moved, spent: r.spent, errors: r.errors }) }),
-    resolver: new Agent({ name: 'resolver', title: '해결 에이전트', description: 'Polymarket 해결 결과 → quest.updateStatus SUCCESS/REVOKE (매일, 크리에이터 플로우)', cron: () => S().resolver.cron, enabled: on('resolver'),
+    resolver: new Agent({ name: 'resolver', title: '해결 에이전트', description: 'Polymarket 해결 결과 → quest.updateStatus SUCCESS/REVOKE → 승리 지갑 청구 (매일, 크리에이터/유저 플로우)', cron: () => S().resolver.cron, enabled: on('resolver'),
       run: async () => { if (!hasMnemonic()) throw new Error('MNEMONIC not set'); return checkAll(); },
-      summarize: (r) => ({ checked: r.checked, resolved: r.resolved?.length ?? 0, pending: r.pending?.length ?? 0, manual: r.manual?.length ?? 0, errors: r.errors?.length ?? 0 }) }),
+      summarize: (r) => ({ checked: r.checked, resolved: r.resolved?.length ?? 0, pending: r.pending?.length ?? 0, manual: r.manual?.length ?? 0, claims: r.claims ?? null, errors: r.errors?.length ?? 0 }) }),
     reporter: new Agent({ name: 'reporter', title: '리포터 에이전트', description: '매시 스냅샷(마켓/볼륨/성공률/잔액) + 일간 리포트 작성', cron: () => S().reporter.cron, enabled: on('reporter'),
       run: async () => buildSnapshot(), summarize: (r) => ({ markets: r.markets, trades24h: r.trades24h, successRate: r.successRate, volume24h: r.volume24h, inBandPct: r.inBandPct }) }),
   };
