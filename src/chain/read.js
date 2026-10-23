@@ -59,7 +59,10 @@ export function decodeAccount(data) {
     const admin = pk(), resolverKey = pk(), hasResolver = u8(), seeder = pk(), collateral_mint = pk(), collateral_decimals = u8(), wad_per_unit = u(16), vault = pk(), question_id = bytes(32), outcome_count = u8(), alpha_wad = u(16);
     const outcome_shares_wad = Array.from({ length: 8 }, () => u(16)), initial_outcome_shares_units = Array.from({ length: 8 }, () => u(8));
     const seed_collateral_units = u(8), max_seed_loss_units = u(8), is_paused = u8() === 1, is_resolved = u8() === 1, is_void = u8() === 1, winning_outcome = u8();
-    return { kind: 'market', admin, resolver: hasResolver ? resolverKey : null, seeder, collateral_mint, collateral_decimals, wad_per_unit, vault, question_id, outcome_count, alpha_wad, outcome_shares_wad: outcome_shares_wad.slice(0, outcome_count), initial_outcome_shares_units: initial_outcome_shares_units.slice(0, outcome_count), seed_collateral_units, max_seed_loss_units, is_paused, is_resolved, is_void, winning_outcome, bump: u8(), vault_bump: u8() };
+    const bump = u8(), vault_bump = u8();
+    // fee block (473-byte accounts): fee bps, fees accrued since the last claimFee, open position accounts
+    const fees = data.length >= a + 24 ? { platform_fee_bps: data.readUInt16LE(a), creator_fee_bps: data.readUInt16LE(a + 2), accrued_platform_fee_units: new BN(data.subarray(a + 4, a + 12), 'le'), accrued_creator_fee_units: new BN(data.subarray(a + 12, a + 20), 'le'), open_positions: data.readUInt32LE(a + 20) } : {};
+    return { kind: 'market', admin, resolver: hasResolver ? resolverKey : null, seeder, collateral_mint, collateral_decimals, wad_per_unit, vault, question_id, outcome_count, alpha_wad, outcome_shares_wad: outcome_shares_wad.slice(0, outcome_count), initial_outcome_shares_units: initial_outcome_shares_units.slice(0, outcome_count), seed_collateral_units, max_seed_loss_units, is_paused, is_resolved, is_void, winning_outcome, bump, vault_bump, ...fees };
   }
   throw new Error('unknown LMSR account discriminator ' + disc);
 }
@@ -69,5 +72,7 @@ export async function readMarket(questId) {
   const info = await withTimeout(connection().getAccountInfo(marketPda(questionId(questId)), 'confirmed'), CONFIG.timeouts.rpc, 'getAccountInfo');
   if (!info) return null;
   const m = decodeAccount(info.data);
-  return { q: m.outcome_shares_wad.map((w) => Number(w.toString()) / 1e18), alpha: Number(m.alpha_wad.toString()) / 1e18, is_resolved: m.is_resolved, is_void: m.is_void, winning_outcome: m.winning_outcome, is_paused: m.is_paused };
+  const units = (bn) => (bn ? Number(bn.toString()) / 10 ** m.collateral_decimals : 0);
+  return { q: m.outcome_shares_wad.map((w) => Number(w.toString()) / 1e18), alpha: Number(m.alpha_wad.toString()) / 1e18, is_resolved: m.is_resolved, is_void: m.is_void, winning_outcome: m.winning_outcome, is_paused: m.is_paused,
+    accruedPlatformFee: units(m.accrued_platform_fee_units), accruedCreatorFee: units(m.accrued_creator_fee_units), openPositions: m.open_positions ?? null };
 }
