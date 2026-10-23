@@ -32,7 +32,7 @@
 | creator | 6시간마다 | 플랫폼 동기화 → 카테고리별 `목표 − 라이브` 만큼 Polymarket 상위 마켓을 골라 생성 (openingRatios = 생성 시점 PM odds, relevantLink = PM URL) |
 | trader | 상시 루프 | 30지갑 라운드로빈, 마켓당 시간당 N회, p* ± 밴드 안에서 양방향 매매 (밴드 밖이면 p* 쪽으로) |
 | oddsSync | 매시 :07 | `quest.lslmsrState` q/alpha → 로컬 LS-LMSR 모델로 정규화 가격 p, Polymarket midpoint p*. 밴드 밖이면 이분탐색으로 필요 금액 산출(1회 최대 이동·금액 상한) → 트레이더 2~4지갑으로 매수 |
-| resolver | 매일 00:30 | Polymarket 해결 → `quest.updateStatus SUCCESS(finalAnswerId)`, 무효 → `REVOKE`. 매핑 없는 마켓은 대시보드에서 수동 해결 |
+| resolver | 매일 00:30 | Polymarket 해결 → `quest.updateStatus SUCCESS(finalAnswerId)`, 무효 → `REVOKE` → **승리 지갑(트레이더 30 + 크리에이터 2) 청구** `betting.createClaim → confirmClaim` (실패분은 매일 재시도). 매핑 없는 마켓은 대시보드에서 수동 해결. ⚠️ 마켓 닫기(`closeLslmsrMarket`)는 반드시 청구가 끝난 뒤에만 |
 | reporter | 매시 :03 | 스냅샷(라이브 수·인밴드%·24h 거래/볼륨/성공률·잔액) + `reports/daily/YYYY-MM-DD.md` |
 
 ## Day-0 체크리스트 (대시보드 개요 탭에 실시간 표시)

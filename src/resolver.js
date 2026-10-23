@@ -9,6 +9,7 @@ import * as pq from './client/polyquest.js';
 import { marketById as pmMarket, resolutionOf } from './polymarket.js';
 import { allMarkets, patchMarket, marketById } from './state.js';
 import { createLogger, appendJsonl, sleep } from './util.js';
+import { claimAll } from './claims.js';
 
 const log = createLogger('resolver');
 const REPORT = path.join(PATHS.reports, 'resolver.jsonl');
@@ -37,6 +38,9 @@ export async function resolveMarket(questId, winner, { reason = 'manual' } = {})
   patchMarket(questId, { status, finalAnswerId: finalAnswerId ?? null, resolvedAt: new Date().toISOString(), resolution: { winner, reason } });
   appendJsonl(REPORT, { t: new Date().toISOString(), questId, title: m.title, status, winner, reason });
   log.info(`quest ${questId} → ${status} (${winner}, ${reason})`);
+  // winners claim right after resolution (user flow); anything that fails here is retried by checkAll's sweep
+  await sleep(5000);
+  try { const c = await claimAll({ questIds: [questId] }); log.info(`quest ${questId} claims: ${c.claimed.length} ok / ${c.failed.length} failed`); } catch (e) { log.warn(`quest ${questId} claims deferred:`, e.message.slice(0, 120)); }
   return r;
 }
 
@@ -58,5 +62,7 @@ export async function checkAll() {
       } else if (ended) { patchMarket(m.questId, { needsManual: true }); out.manual.push({ questId: m.questId, title: m.title }); }
     } catch (e) { out.errors.push({ questId: m.questId, error: e.message.slice(0, 160) }); log.error(`quest ${m.questId}:`, e.message.slice(0, 160)); }
   }
+  // sweep: claim any winnings still unclaimed on resolved quests (must run before a market is ever closed)
+  try { const c = await claimAll(); out.claims = { claimed: c.claimed.length, failed: c.failed.length }; } catch (e) { out.errors.push({ claims: e.message.slice(0, 160) }); }
   return out;
 }
