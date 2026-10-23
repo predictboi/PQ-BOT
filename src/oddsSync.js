@@ -38,10 +38,11 @@ export async function marketModel(questId) {
   return new LsLmsr({ alpha: m.alpha, q: m.q });
 }
 
-/** Pick wallets with the most USDP (from the cached balances); falls back to round-robin. */
-function pickWallets(k, exclude = new Set()) {
-  const ws = traderWallets(); const bal = loadRuntime().balances || [];
-  const ranked = ws.map((w) => { const b = bal.find((x) => x.index === w.index); return { w, usdp: b?.usdp ?? 0, sol: b?.sol ?? 0 }; }).filter((x) => !exclude.has(x.w.index) && x.sol >= 0.01).sort((a, b) => b.usdp - a.usdp);
+/** Pick k funded wallets: ones that follow this market (organic favorites) first, in random order, then the richest. */
+function pickWallets(k, questId = null, exclude = new Set()) {
+  const ws = traderWallets(); const rt = loadRuntime(); const bal = rt.balances || []; const fav = rt.organic?.favorites || {};
+  const ranked = ws.map((w) => { const b = bal.find((x) => x.index === w.index); return { w, usdp: b?.usdp ?? 0, sol: b?.sol ?? 0, fan: (fav[w.label] || []).includes(questId) ? 1 : 0, r: Math.random() }; })
+    .filter((x) => !exclude.has(x.w.index) && x.sol >= 0.01 && x.usdp >= 100).sort((a, b) => b.fan - a.fan || (a.fan ? a.r - b.r : b.usdp - a.usdp));
   return ranked.slice(0, k).map((x) => x.w);
 }
 
@@ -61,13 +62,13 @@ export async function syncMarket(m, s) {
     if (plan.skip) { rec.skipped = plan.reason; rec.delta = round(plan.delta, 4); return rec; }
     Object.assign(rec, { outcome: plan.outcome, spend: plan.spend, moveTarget: plan.target, expectedAfter: plan.expectedAfter, capped: plan.capped });
     const answerId = plan.i === 0 ? m.yesAnswerId : m.noAnswerId; if (!answerId) { rec.skipped = 'no-answer-id'; return rec; }
-    const wallets = pickWallets(plan.chunks.length); if (!wallets.length) { rec.skipped = 'no-funded-wallets'; return rec; }
+    const wallets = pickWallets(plan.chunks.length, m.questId); if (!wallets.length) { rec.skipped = 'no-funded-wallets'; return rec; }
     rec.wallets = []; rec.ok = 0; rec.fail = 0;
     for (let j = 0; j < plan.chunks.length; j++) {
       const w = wallets[j % wallets.length]; const spent = plan.chunks[j];
       try { await withLock(w.address, () => pq.sessions.withSession(w.kp, (sess) => pq.trade(sess, w.kp, { questId: m.questId, answerId, spent, kind: 'BUY' }))); rec.ok++; rec.wallets.push(`${w.label}:${spent}`); }
       catch (e) { rec.fail++; rec.wallets.push(`${w.label}:${spent}:FAIL`); log.error(`q${m.questId} ${w.label} ${spent} failed:`, e.message.slice(0, 120)); }
-      await sleep(s.pauseMs);
+      await sleep(s.pauseMs + Math.random() * (s.chunkJitterMs || 0)); // separate traders, not one burst
     }
     if (!CONFIG.dryRun) { await sleep(2500); try { rec.pAfter = round((await marketModel(m.questId)).normPrices()[0], 4); patchMarket(m.questId, { p: rec.pAfter, pAt: new Date().toISOString() }); } catch { /* ignore */ } }
     log.info(`q${m.questId} ${rec.pBefore} → ${rec.pTarget} (${source}) buy ${plan.outcome} ${plan.spend} → after ${rec.pAfter ?? '?'} (${rec.ok} ok / ${rec.fail} fail)`);
@@ -78,8 +79,9 @@ export async function syncMarket(m, s) {
 
 export async function syncAll() {
   const s = getSettings().oddsSync; const markets = liveMarkets().filter((m) => isMapped(m) || m.manual?.targetOdds != null);
-  const results = [];
-  for (const m of markets) { results.push(await syncMarket(m, s)); }
+  const results = []; const order = [...markets].sort(() => Math.random() - 0.5);
+  const gapMs = ((s.spreadMin || 0) * 60000 * 2) / Math.max(1, order.length); // spread the run over ~spreadMin minutes
+  for (const m of order) { results.push(await syncMarket(m, s)); if (gapMs) await sleep(Math.random() * gapMs); }
   const moved = results.filter((r) => r.spend), inBand = results.filter((r) => r.skipped === 'in-band').length;
   const summary = { markets: markets.length, inBand, moved: moved.length, spent: moved.reduce((a, r) => a + (r.spend || 0), 0), errors: results.filter((r) => r.error).length, results };
   patchRuntime({ lastOddsSync: { t: new Date().toISOString(), markets: summary.markets, inBand, moved: summary.moved, spent: summary.spent, errors: summary.errors } });
