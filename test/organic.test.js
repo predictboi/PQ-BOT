@@ -36,3 +36,8 @@ test('poisson gaps average 1/rate', () => {
   const g = Array.from({ length: 20000 }, () => nextGapMs(0.01)); const mean = g.reduce((a, x) => a + x, 0) / g.length;
   assert.ok(Math.abs(mean - 100000) < 5000, `mean ${mean}`);
 });
+
+test('favorites cover every live market (no market without a fan)', () => {
+  const p = assignPersonas(wallets, cats); const f = assignFavorites(p, markets, {}, { day: 3 });
+  const covered = new Set(Object.values(f).flat()); assert.equal(markets.filter((m) => !covered.has(m.questId)).length, 0);
+});

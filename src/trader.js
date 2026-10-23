@@ -8,7 +8,7 @@ import * as pq from './client/polyquest.js';
 import { withLock } from './locks.js';
 import { marketModel } from './oddsSync.js';
 import { getSettings, liveMarkets, loadRuntime, patchRuntime, patchMarket } from './state.js';
-import { createLogger, sleep, rnd, appendJsonl, withTimeout, round, clamp } from './util.js';
+import { createLogger, sleep, rnd, appendJsonl, readJsonl, withTimeout, round, clamp } from './util.js';
 import { PERSONAS, assignPersonas, assignFavorites, popularity, rateAt, nextGapMs, orderSize, rng, hashStr } from './organic.js';
 
 const log = createLogger('trader');
@@ -17,7 +17,9 @@ const DAY = 86400000;
 const pick = (items, weight) => { const tot = items.reduce((a, x) => a + weight(x), 0); let u = Math.random() * tot; for (const x of items) { u -= weight(x); if (u <= 0) return x; } return items[items.length - 1]; };
 
 export class VolumeTrader {
-  constructor({ onTrade } = {}) { this.onTrade = onTrade; this.running = false; this.stats = { n: 0, ok: 0, fail: 0, startedAt: null, lastTradeAt: null, lastError: null }; this.odds = {}; this.queue = []; this.lastWallet = null; this.lastMarket = {}; this.lastPStar = {}; }
+  constructor({ onTrade } = {}) { this.onTrade = onTrade; this.running = false; this.stats = { n: 0, ok: 0, fail: 0, startedAt: null, lastTradeAt: null, lastError: null }; this.odds = {}; this.queue = []; this.lastWallet = null; this.lastMarket = {}; this.lastPStar = {}; this.recent = {}; }
+  /** Trades per market over the last 24h (from the trade log), used to spread volume to quiet markets. */
+  loadRecent() { const since = Date.now() - DAY; this.recent = {}; for (const r of readJsonl(TRADES, { limit: 5000 })) if (r.ok && new Date(r.t).getTime() >= since) this.recent[r.questId] = (this.recent[r.questId] || 0) + 1; }
   get settings() { return getSettings().trader; }
   targets() { return loadRuntime().targets || {}; }
   /** p* for a market: last odds-sync target → manual target → opening ratio → null (then the current price is the anchor) */
@@ -63,7 +65,7 @@ export class VolumeTrader {
     if (!m) {
       const favs = (o.favorites[w.label] || []).map((q) => byId.get(q)).filter((x) => x && x.questId !== this.lastMarket[w.label]);
       if (!favs.length) return { skipped: 'no-favorite' };
-      m = pick(favs, (x) => popularity(x));
+      m = pick(favs, (x) => popularity(x) / (1 + 0.5 * (this.recent[x.questId] || 0))); // quiet markets catch up
     }
     const type = o.personas[w.label].type; const p = this.odds[m.questId]?.p ?? this.pStar(m) ?? 0.5; const ps = this.pStar(m) ?? p;
     let oi;
@@ -78,16 +80,16 @@ export class VolumeTrader {
     const bal = this.walletBalance(w); if (kind === 'BUY' && bal) spent = Math.min(spent, Math.floor(bal.usdp * s.maxBuyFrac));
     if (spent < 1) return { skipped: 'tiny' };
     const answerId = oi === 0 ? m.yesAnswerId : m.noAnswerId; const outcome = oi === 0 ? 'YES' : 'NO';
-    const rec = { t: new Date().toISOString(), questId: m.questId, wallet: w.label, persona: type, kind, outcome, spent, follow: !!ev.follow, burst: !!ev.burst, p: round(p, 4), pStar: round(ps, 4) };
+    const rec = { t: new Date().toISOString(), questId: m.questId, wallet: w.label, persona: type, kind, outcome, spent, follow: !!ev.follow, burst: !!ev.burst, cover: !!ev.cover, p: round(p, 4), pStar: round(ps, 4) };
     try {
       const r = await withLock(w.address, () => withTimeout(pq.sessions.withSession(w.kp, (sess) => pq.trade(sess, w.kp, { questId: m.questId, answerId, spent, kind })), CONFIG.timeouts.trade + 15000, 'trade'));
       o.held[key] = { amt: Math.max(0, h.amt + (kind === 'BUY' ? spent : -spent)), at: kind === 'BUY' ? Date.now() : h.at };
       patchRuntime({ organic: { ...(loadRuntime().organic || {}), held: o.held } });
       this.stats.ok++; rec.ok = true; rec.verified = !!r?.verified; rec.dryRun = !!r?.dryRun;
     } catch (e) { this.stats.fail++; rec.ok = false; rec.error = (e.message || '').slice(0, 120); this.stats.lastError = rec.error; }
-    this.stats.n++; this.stats.lastTradeAt = rec.t; this.lastWallet = w.label; this.lastMarket[w.label] = m.questId;
+    this.stats.n++; this.stats.lastTradeAt = rec.t; this.lastWallet = w.label; this.lastMarket[w.label] = m.questId; if (rec.ok) this.recent[m.questId] = (this.recent[m.questId] || 0) + 1;
     appendJsonl(TRADES, rec); this.onTrade?.(rec);
-    log.info(`#${this.stats.n} q${m.questId} ${w.label}(${type}) ${kind} ${outcome} ${spent}${ev.follow ? ' follow' : ''}${ev.burst ? ' burst' : ''} ${rec.ok ? 'ok' : 'FAIL ' + rec.error}`);
+    log.info(`#${this.stats.n} q${m.questId} ${w.label}(${type}) ${kind} ${outcome} ${spent}${ev.follow ? ' follow' : ''}${ev.burst ? ' burst' : ''}${ev.cover ? ' cover' : ''} ${rec.ok ? 'ok' : 'FAIL ' + rec.error}`);
     return rec;
   }
 
@@ -95,7 +97,7 @@ export class VolumeTrader {
     if (this.running) return; this.running = true; this.stats.startedAt = new Date().toISOString();
     this.wallets = traderWallets();
     let markets = []; let lastSnap = 0; let day = -1; let n = 0; let reloginAt = 0;
-    const refresh = async () => { markets = liveMarkets().filter((m) => m.yesAnswerId && m.noAnswerId); this.plan(markets); await this.snap(markets); lastSnap = Date.now(); day = this.org.day; };
+    const refresh = async () => { markets = liveMarkets().filter((m) => m.yesAnswerId && m.noAnswerId); this.plan(markets); this.loadRecent(); await this.snap(markets); lastSnap = Date.now(); day = this.org.day; };
     try {
       await refresh();
       let nextAt = Date.now() + nextGapMs(rateAt(new Date(), this.settings));
@@ -106,7 +108,10 @@ export class VolumeTrader {
         const due = this.queue.filter((e) => e.at <= Date.now()).sort((a, b) => a.at - b.at)[0];
         if (due) { this.queue.splice(this.queue.indexOf(due), 1); await this.execute(due, markets).catch((e) => log.error('trade error:', e.message)); n++; }
         else if (Date.now() >= nextAt) {
-          await this.execute({}, markets).catch((e) => log.error('trade error:', e.message)); n++;
+          // a share of arrivals goes to the quietest live market so every market keeps some activity
+          let ev = {};
+          if (Math.random() < (s.coverP ?? 0.25)) { const quiet = [...markets].sort((a, b) => (this.recent[a.questId] || 0) - (this.recent[b.questId] || 0) || Math.random() - 0.5)[0]; if (quiet) ev = { questId: quiet.questId, cover: true }; }
+          await this.execute(ev, markets).catch((e) => log.error('trade error:', e.message)); n++;
           if (Math.random() < s.burstP) { const k = 2 + Math.floor(Math.random() * 4); for (let i = 0; i < k; i++) this.queue.push({ at: Date.now() + rnd(0.5, 6) * 60000, burst: true }); }
           nextAt = Date.now() + Math.max(s.minGapMs, nextGapMs(rateAt(new Date(), s)));
         }

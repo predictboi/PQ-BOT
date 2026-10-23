@@ -51,6 +51,15 @@ export function assignFavorites(personas, markets, prev = {}, { day = 0 } = {}) 
     }
     out[label] = keep;
   }
+  // coverage: every live market gets at least one fan (preferring wallets that like its category), so none goes silent
+  const fans = new Map(markets.map((m) => [m.questId, 0])); for (const qs of Object.values(out)) for (const q of qs) fans.set(q, (fans.get(q) || 0) + 1);
+  const labels = Object.keys(personas); const r = rng(day * 7 + 1);
+  for (const m of markets) {
+    if (fans.get(m.questId)) continue;
+    const pref = labels.filter((l) => personas[l].cats.includes(m.category)); const pool = pref.length ? pref : labels;
+    const l = pool.reduce((best, x) => ((out[x]?.length || 0) < (out[best]?.length || 0) ? x : best), pool[Math.floor(r() * pool.length)]);
+    (out[l] ||= []).push(m.questId); fans.set(m.questId, 1);
+  }
   return out;
 }
 export function hashStr(s) { let h = 2166136261; for (const c of String(s)) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619); } return h >>> 0; }
