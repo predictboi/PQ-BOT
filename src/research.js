@@ -10,6 +10,17 @@ import { createLogger, readJson } from './util.js';
 const log = createLogger('research');
 
 export function ratiosFromYes(p) { const y = Math.round(Math.min(0.95, Math.max(0.05, p)) * 100); return [String(y), String(100 - y)]; }
+/**
+ * When trading should stop: the moment the outcome becomes public (kickoff for a match, polls closing for an election),
+ * if that is known and earlier than Polymarket's end date — after it, prices only chase a known result.
+ * Ignored when it is in the past, under 12h away, or not a valid date.
+ */
+export function tradingEnd(pm, knownAt = null, now = Date.now()) {
+  const end = new Date(pm.endDate).getTime();
+  const cands = [pm.gameStartTime, knownAt].map((x) => (x ? new Date(x).getTime() : NaN)).filter((t) => Number.isFinite(t) && t > now + 12 * 3600000 && t < end);
+  return new Date(cands.length ? Math.min(...cands) : end).toISOString();
+}
+
 const fmtDate = (iso) => new Date(iso).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' });
 
 /** Template writer (no LLM): keeps the original question so it stays unambiguous. */
@@ -26,11 +37,12 @@ async function claudeWriter(items) {
   if (!CONFIG.anthropic.apiKey || items.length === 0) return null;
   let Anthropic; try { Anthropic = (await import('@anthropic-ai/sdk')).default; } catch { log.warn('@anthropic-ai/sdk not installed; using template titles'); return null; }
   const client = new Anthropic({ apiKey: CONFIG.anthropic.apiKey });
-  const system = 'You write English prediction-market listings for Polyquest. For each input market return a JSON array (same order) of objects {"title": string, "description": string, "imageSubject": string}. ' +
+  const system = 'You write English prediction-market listings for Polyquest. For each input market return a JSON array (same order) of objects {"title": string, "description": string, "imageSubject": string, "knownAt": string|null}. ' +
     'title: natural English, ≤ 80 chars, must keep the exact threshold/date/entity of the original question (do not reinterpret), end with "?". ' +
     'description: 2–4 English sentences: what resolves YES, the resolution source (the Polymarket market URL + original source), the deadline. ' +
-    'imageSubject: one English phrase describing a single hero subject for a text-free thumbnail. Output ONLY the JSON array.';
-  const user = JSON.stringify(items.map((pm) => ({ question: pm.question, event: pm.eventTitle, groupItem: pm.groupItemTitle, endDate: pm.endDate, description: (pm.description || '').slice(0, 600), url: pm.url })));
+    'imageSubject: one English phrase describing a single hero subject for a text-free thumbnail. ' +
+    'knownAt: ISO 8601 UTC time when the outcome becomes publicly known in practice (match kickoff for a game result, polls closing for an election, the scheduled announcement for an award or data release); null when it can happen any time before the deadline or you are not sure. Output ONLY the JSON array.';
+  const user = JSON.stringify(items.map((pm) => ({ question: pm.question, event: pm.eventTitle, groupItem: pm.groupItemTitle, endDate: pm.endDate, gameStartTime: pm.gameStartTime, description: (pm.description || '').slice(0, 600), url: pm.url })));
   const res = await client.beta.messages.create({
     model: CONFIG.anthropic.model, max_tokens: 16000,
     betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default',
@@ -73,9 +85,9 @@ export async function pickTopics(categoryId, need, { minDays, maxDays } = {}) {
     if (usedTitles.has(w.title)) w.title = `${w.title} (${pm.groupItemTitle || pm.id})`;
     return {
       title: w.title, description: w.description, imageSubject: w.imageSubject || null,
-      endDateISO: new Date(pm.endDate).toISOString(), openingRatios: ratiosFromYes(pm.yesPrice), categoryId: cat.id, category: cat.name,
+      endDateISO: tradingEnd(pm, w.knownAt), openingRatios: ratiosFromYes(pm.yesPrice), categoryId: cat.id, category: cat.name,
       relevantLink: pm.url, answers: [{ title: 'Yes' }, { title: 'No' }],
-      polymarket: { id: pm.id, conditionId: pm.conditionId, slug: pm.slug, eventSlug: pm.eventSlug, question: pm.question, tokenIds: pm.tokenIds, url: pm.url, yesAtCreate: pm.yesPrice, volume24hr: pm.volume24hr },
+      polymarket: { id: pm.id, conditionId: pm.conditionId, slug: pm.slug, eventSlug: pm.eventSlug, question: pm.question, endDate: pm.endDate, tokenIds: pm.tokenIds, url: pm.url, yesAtCreate: pm.yesPrice, volume24hr: pm.volume24hr },
     };
   });
   log.info(`category ${cat.name}: ${cands.length} candidates → ${specs.length} specs (need ${need})`);

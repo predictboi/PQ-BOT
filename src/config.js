@@ -55,8 +55,11 @@ export const DEFAULT_SETTINGS = {
     // seed (USDP) per new market, drawn uniformly from [min, max] and rounded to 100; markets made before this use 15,000
     seedRange: [40000, 70000] },
   // organic trader (src/organic.js): ~tradesPerDay Poisson arrivals shaped by the UTC hour curve, persona wallets on favorite markets
-  trader: { tradesPerDay: num('TRADES_PER_DAY', 800), weekendFactor: 0.8, burstP: 0.06, coverP: 0.25, band: 0.05, sellP: 0.3, minHoldMin: 120, followMove: 0.03, maxBuyFrac: 0.15, snapMin: 10, minGapMs: 4000 },
-  oddsSync: { cron: env('ODDS_SYNC_CRON', '7 * * * *'), band: num('ODDS_BAND', 0.02), maxMove: num('MAX_MOVE_PER_SYNC', 0.08), maxSpend: num('ODDS_MAX_SPEND', 3000), walletsMin: 2, walletsMax: 4, pauseMs: 2000, chunkJitterMs: 60000, spreadMin: 40 },
+  trader: { tradesPerDay: num('TRADES_PER_DAY', 800), weekendFactor: 0.8, burstP: 0.06, coverP: 0.25, band: 0.05, sellP: 0.3, minHoldMin: 120, followMove: 0.03, maxBuyFrac: 0.15, snapMin: 10, minGapMs: 4000,
+    decidedP: 0.985 }, // organic trading stops once Polymarket is past this (or the Polymarket market closed)
+  oddsSync: { cron: env('ODDS_SYNC_CRON', '7 * * * *'), band: num('ODDS_BAND', 0.02), maxMove: num('MAX_MOVE_PER_SYNC', 0.08), maxSpend: num('ODDS_MAX_SPEND', 3000), walletsMin: 2, walletsMax: 4, pauseMs: 2000, chunkJitterMs: 60000, spreadMin: 40,
+    // Polymarket ≥ decisiveP (or ≤ 1−decisiveP): the result is effectively known → no per-run move cap, bigger budget
+    decisiveP: 0.95, decisiveMaxSpend: num('ODDS_DECISIVE_MAX_SPEND', 15000) },
   funding: { cron: '*/30 * * * *', solMin: num('SOL_MIN', 0.03), solTopup: num('SOL_TOPUP', 0.04), usdpMin: num('USDP_MIN', 500), usdpTopup: num('USDP_TOPUP', 5000), traderSolInit: 0.08, traderUsdpInit: 50000, creatorSolInit: 0.3, creatorUsdpInit: 900000, funderSolReserve: 0.2 },
   resolver: { cron: '30 0 * * *' },
   reporter: { cron: '3 * * * *' },
