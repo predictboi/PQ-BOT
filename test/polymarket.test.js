@@ -1,9 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { normalizeMarket, resolutionOf } from '../src/polymarket.js';
-import { planMove, assignChunks, FEE_BUFFER } from '../src/oddsSync.js';
+import { planMove, assignChunks, FEE_BUFFER, isDecisive } from '../src/oddsSync.js';
 import { LsLmsr } from '../src/lslmsr.js';
-import { ratiosFromYes } from '../src/research.js';
+import { ratiosFromYes, tradingEnd } from '../src/research.js';
 
 const raw = { id: '1', question: 'Will X?', conditionId: '0xabc', slug: 'will-x', outcomes: '["Yes","No"]', outcomePrices: '["0.62","0.38"]', clobTokenIds: '["111","222"]', endDate: '2027-01-01T00:00:00Z', closed: false, acceptingOrders: true, volumeNum: 10, volume24hr: 5, bestBid: 0.61, bestAsk: 0.63 };
 test('normalizeMarket parses JSON-string fields and maps YES/NO', () => {
@@ -35,4 +35,21 @@ test('assignChunks: only wallets that can pay amount + fee, budgets tracked acro
   const poor = assignChunks([750, 750], [{ w: { label: 'X' }, usdp: 420 }]);
   assert.deepEqual(poor.map((o) => [o.w.label, o.spent, o.shrunk]), [['X', Math.floor(420 / FEE_BUFFER), true]]);
   assert.deepEqual(assignChunks([500], []), []);
+});
+
+test('tradingEnd: stop at kickoff / polls closing when earlier than the Polymarket end date', () => {
+  const now = Date.parse('2026-10-20T00:00:00Z');
+  const pm = { endDate: '2026-10-26T04:00:00Z', gameStartTime: null };
+  assert.equal(tradingEnd(pm, null, now), '2026-10-26T04:00:00.000Z');
+  assert.equal(tradingEnd(pm, '2026-10-25T20:00:00Z', now), '2026-10-25T20:00:00.000Z'); // polls close
+  assert.equal(tradingEnd({ ...pm, gameStartTime: '2026-10-25T19:00:00Z' }, '2026-10-25T20:00:00Z', now), '2026-10-25T19:00:00.000Z');
+  assert.equal(tradingEnd(pm, '2026-10-27T00:00:00Z', now), '2026-10-26T04:00:00.000Z'); // later than end → ignored
+  assert.equal(tradingEnd(pm, '2026-10-20T06:00:00Z', now), '2026-10-26T04:00:00.000Z'); // < 12h away → ignored
+  assert.equal(tradingEnd(pm, 'not a date', now), '2026-10-26T04:00:00.000Z');
+});
+
+test('isDecisive: near 0 or 1 only', () => {
+  assert.equal(isDecisive(0.995), true); assert.equal(isDecisive(0.03), true);
+  assert.equal(isDecisive(0.5), false); assert.equal(isDecisive(0.94), false); assert.equal(isDecisive(null), false);
+  assert.equal(isDecisive(0.97, 0.985), false); assert.equal(isDecisive(0.99, 0.985), true);
 });

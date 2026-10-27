@@ -23,7 +23,7 @@ export function normalizeMarket(m, ev = {}) {
     outcomes, isBinary: outcomes.length === 2 && yes >= 0,
     yesPrice: prices[yi], noPrice: prices[ni], tokenIds: [tokenIds[yi], tokenIds[ni]],
     bestBid: m.bestBid != null ? Number(m.bestBid) : null, bestAsk: m.bestAsk != null ? Number(m.bestAsk) : null, lastTradePrice: m.lastTradePrice != null ? Number(m.lastTradePrice) : null,
-    endDate: m.endDate || m.endDateIso, startDate: m.startDate, closed: !!m.closed, active: !!m.active, acceptingOrders: !!m.acceptingOrders,
+    endDate: m.endDate || m.endDateIso, startDate: m.startDate, gameStartTime: m.gameStartTime || null, closed: !!m.closed, active: !!m.active, acceptingOrders: !!m.acceptingOrders,
     volume: Number(m.volumeNum ?? m.volume ?? 0), volume24hr: Number(m.volume24hr ?? 0), liquidity: Number(m.liquidityNum ?? m.liquidity ?? 0),
     umaResolutionStatus: m.umaResolutionStatus || null, resolutionSource: m.resolutionSource || ev.resolutionSource || '', description: m.description || '',
     eventMarketCount: ev.markets?.length ?? 1, image: m.image || ev.image || null,

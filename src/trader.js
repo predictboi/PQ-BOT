@@ -6,7 +6,7 @@ import { CONFIG, PATHS, CATEGORIES } from './config.js';
 import { traderWallets } from './wallets.js';
 import * as pq from './client/polyquest.js';
 import { withLock } from './locks.js';
-import { marketModel } from './oddsSync.js';
+import { marketModel, isDecisive } from './oddsSync.js';
 import { getSettings, liveMarkets, loadRuntime, patchRuntime, patchMarket } from './state.js';
 import { createLogger, sleep, rnd, appendJsonl, readJsonl, withTimeout, round, clamp } from './util.js';
 import { PERSONAS, assignPersonas, assignFavorites, popularity, rateAt, nextGapMs, orderSize, rng, hashStr } from './organic.js';
@@ -24,6 +24,8 @@ export class VolumeTrader {
   targets() { return loadRuntime().targets || {}; }
   /** p* for a market: last odds-sync target → manual target → opening ratio → null (then the current price is the anchor) */
   pStar(m) { const t = this.targets()[m.questId]; if (t?.pStar != null) return t.pStar; if (m.manual?.targetOdds != null) return Number(m.manual.targetOdds); if (m.openingRatios?.[0]) return Number(m.openingRatios[0]) / 100; return null; }
+  /** Result effectively known (Polymarket closed or past decidedP): organic traders leave it; odds sync still aligns it. */
+  decided(m) { const t = this.targets()[m.questId]; return !!t && (t.closed || isDecisive(t.pStar, this.settings.decidedP ?? 0.985)); }
   walletBalance(w) { const b = (loadRuntime().balances || []).find((x) => x.index === w.index); return b ? { sol: b.sol, usdp: b.usdp } : null; }
 
   /** Personas, today's favorites and today's active wallets (persisted in runtime.organic so restarts keep them). */
@@ -97,7 +99,7 @@ export class VolumeTrader {
     if (this.running) return; this.running = true; this.stats.startedAt = new Date().toISOString();
     this.wallets = traderWallets();
     let markets = []; let lastSnap = 0; let day = -1; let n = 0; let reloginAt = 0;
-    const refresh = async () => { markets = liveMarkets().filter((m) => m.yesAnswerId && m.noAnswerId); this.plan(markets); this.loadRecent(); await this.snap(markets); lastSnap = Date.now(); day = this.org.day; };
+    const refresh = async () => { markets = liveMarkets().filter((m) => m.yesAnswerId && m.noAnswerId && !this.decided(m)); this.plan(markets); this.loadRecent(); await this.snap(markets); lastSnap = Date.now(); day = this.org.day; };
     try {
       await refresh();
       let nextAt = Date.now() + nextGapMs(rateAt(new Date(), this.settings));
