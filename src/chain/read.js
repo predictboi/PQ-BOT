@@ -74,5 +74,6 @@ export async function readMarket(questId) {
   const m = decodeAccount(info.data);
   const units = (bn) => (bn ? Number(bn.toString()) / 10 ** m.collateral_decimals : 0);
   return { q: m.outcome_shares_wad.map((w) => Number(w.toString()) / 1e18), alpha: Number(m.alpha_wad.toString()) / 1e18, is_resolved: m.is_resolved, is_void: m.is_void, winning_outcome: m.winning_outcome, is_paused: m.is_paused,
-    accruedPlatformFee: units(m.accrued_platform_fee_units), accruedCreatorFee: units(m.accrued_creator_fee_units), openPositions: m.open_positions ?? null };
+    accruedPlatformFee: units(m.accrued_platform_fee_units), accruedCreatorFee: units(m.accrued_creator_fee_units), openPositions: m.open_positions ?? null,
+    decimals: m.collateral_decimals, feeBps: (m.platform_fee_bps ?? 0) + (m.creator_fee_bps ?? 0) };
 }
