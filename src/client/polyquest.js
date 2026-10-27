@@ -6,6 +6,9 @@ import bs58 from 'bs58';
 import { VersionedTransaction, Transaction } from '@solana/web3.js';
 import { CONFIG } from '../config.js';
 import { withTimeout, sleep, createLogger } from '../util.js';
+import { readMarket } from '../chain/read.js';
+import { LsLmsr } from '../lslmsr.js';
+import { allMarkets } from '../state.js';
 
 const BASE = CONFIG.apiBase;
 const log = createLogger('client');
@@ -158,10 +161,43 @@ export async function verifyBetLanded(sess, addr, bettingId, { tries = 4, delayM
   return { landed: false, reason: 'no-txn' };
 }
 
+// headroom between our quote and the server's reprice (other trades can land in between); the server rejects with
+// PRICE_MOVED only when its reprice is worse than slippageBps, so a slightly conservative quote always passes
+const QUOTE_SLIPPAGE_BPS = 200, QUOTE_MARGIN = 0.995;
+
+/**
+ * Pure: the approvedQuote the confirm modal sends, in collateral base units (u64 strings).
+ * BUY spends `spent` USDP gross (fee on top of the pool cost) → asks for slightly fewer shares than it could get.
+ * SELL sells `spent` shares → asks for slightly less than the pool would pay after fees.
+ */
+export function buildQuote(market, i, kind, spent) {
+  const dec = market.decimals ?? 6, f = (market.feeBps ?? 0) / 10000, scale = 10 ** dec;
+  const units = (x) => String(Math.floor(x * scale));
+  const model = new LsLmsr({ alpha: market.alpha, q: market.q });
+  if (kind === 'SELL') {
+    const shares = Math.floor(spent * scale) / scale;
+    const net = model.quoteSell(i, shares) * (1 - f) * QUOTE_MARGIN;
+    return { kind, shareUnits: units(shares), netUnits: units(net) };
+  }
+  const shares = model.sharesForAmount(i, spent / (1 + f)) * QUOTE_MARGIN;
+  return { kind: 'BUY', shareUnits: units(shares), grossUnits: units(spent) };
+}
+
+/** Outcome index of an answer (0 = YES, 1 = NO) from the local market record. */
+function outcomeIndex(questId, answerId) {
+  const m = allMarkets().find((x) => Number(x.questId) === Number(questId));
+  if (m?.yesAnswerId === Number(answerId)) return 0; if (m?.noAnswerId === Number(answerId)) return 1;
+  const idx = (m?.answers || []).findIndex((a) => a.id === Number(answerId)); if (idx >= 0) return idx;
+  throw new Error(`unknown answer ${answerId} for quest ${questId}`);
+}
+
 export async function trade(sess, kp, { questId, answerId, spent, kind = 'BUY', inputTokenAddr = CONFIG.usdpMint }) {
-  const input = { questId: Number(questId), answerId: Number(answerId), solAmount: null, spent: Number(spent), source: 'APP', kind };
+  const input = { questId: Number(questId), answerId: Number(answerId), solAmount: null, spent: Number(spent), source: 'APP', kind, slippageBps: QUOTE_SLIPPAGE_BPS };
   if (inputTokenAddr) input.inputTokenAddr = inputTokenAddr;
   if (CONFIG.dryRun) { log.info('DRY_RUN trade', JSON.stringify(input)); return { dryRun: true, betting: null, verified: false }; }
+  const market = await readMarket(questId); if (!market) throw new Error(`market account not found for quest ${questId}`);
+  input.approvedQuote = buildQuote(market, outcomeIndex(questId, answerId), kind, Number(spent));
+  if (Number(input.approvedQuote.shareUnits) <= 0 || Number(input.approvedQuote.grossUnits ?? input.approvedQuote.netUnits) <= 0) throw new Error('order too small to quote');
   const d = peel(await withTimeout(trpc(sess, 'betting.draftLslmsr', input), T.trade, 'betting.draftLslmsr'));
   if (!d?.encodedTx) throw new Error(`draftLslmsr returned no encodedTx: ${JSON.stringify(d).slice(0, 160)}`);
   const signedTx = signEncodedTx(kp, d.encodedTx);
