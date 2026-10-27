@@ -43,7 +43,27 @@ function pickWallets(k, questId = null, exclude = new Set()) {
   const ws = traderWallets(); const rt = loadRuntime(); const bal = rt.balances || []; const fav = rt.organic?.favorites || {};
   const ranked = ws.map((w) => { const b = bal.find((x) => x.index === w.index); return { w, usdp: b?.usdp ?? 0, sol: b?.sol ?? 0, fan: (fav[w.label] || []).includes(questId) ? 1 : 0, r: Math.random() }; })
     .filter((x) => !exclude.has(x.w.index) && x.sol >= 0.01 && x.usdp >= 100).sort((a, b) => b.fan - a.fan || (a.fan ? a.r - b.r : b.usdp - a.usdp));
-  return ranked.slice(0, k).map((x) => x.w);
+  return ranked.slice(0, k).map((x) => ({ w: x.w, usdp: x.usdp }));
+}
+
+// a buy needs the amount plus the trading fee; leave headroom so the draft doesn't fail on "balance is not enough"
+export const FEE_BUFFER = 1.05;
+
+/**
+ * Pure: give each chunk to a wallet that can pay for it (rotating, budget tracked across chunks). A chunk no wallet can
+ * cover in full goes to the richest one, shrunk to what it can afford; chunks under 1 USDP are dropped.
+ */
+export function assignChunks(chunks, pool, buffer = FEE_BUFFER) {
+  const left = pool.map((x) => ({ ...x })); const out = [];
+  chunks.forEach((chunk, j) => {
+    if (!left.length) return;
+    let e = null;
+    for (let t = 0; t < left.length && !e; t++) { const c = left[(j + t) % left.length]; if (c.usdp >= chunk * buffer) e = c; }
+    const spent = e ? chunk : Math.floor((e = left.reduce((a, b) => (b.usdp > a.usdp ? b : a))).usdp / buffer);
+    if (spent < 1) return;
+    e.usdp -= spent * buffer; out.push({ w: e.w, spent, shrunk: spent < chunk });
+  });
+  return out;
 }
 
 export async function syncMarket(m, s) {
@@ -62,11 +82,10 @@ export async function syncMarket(m, s) {
     if (plan.skip) { rec.skipped = plan.reason; rec.delta = round(plan.delta, 4); return rec; }
     Object.assign(rec, { outcome: plan.outcome, spend: plan.spend, moveTarget: plan.target, expectedAfter: plan.expectedAfter, capped: plan.capped });
     const answerId = plan.i === 0 ? m.yesAnswerId : m.noAnswerId; if (!answerId) { rec.skipped = 'no-answer-id'; return rec; }
-    const wallets = pickWallets(plan.chunks.length, m.questId); if (!wallets.length) { rec.skipped = 'no-funded-wallets'; return rec; }
+    const orders = assignChunks(plan.chunks, pickWallets(plan.chunks.length, m.questId)); if (!orders.length) { rec.skipped = 'no-funded-wallets'; return rec; }
     rec.wallets = []; rec.ok = 0; rec.fail = 0;
-    for (let j = 0; j < plan.chunks.length; j++) {
-      const w = wallets[j % wallets.length]; const spent = plan.chunks[j];
-      try { await withLock(w.address, () => pq.sessions.withSession(w.kp, (sess) => pq.trade(sess, w.kp, { questId: m.questId, answerId, spent, kind: 'BUY' }))); rec.ok++; rec.wallets.push(`${w.label}:${spent}`); }
+    for (const { w, spent, shrunk } of orders) {
+      try { await withLock(w.address, () => pq.sessions.withSession(w.kp, (sess) => pq.trade(sess, w.kp, { questId: m.questId, answerId, spent, kind: 'BUY' }))); rec.ok++; rec.wallets.push(`${w.label}:${spent}${shrunk ? ':shrunk' : ''}`); }
       catch (e) { rec.fail++; rec.wallets.push(`${w.label}:${spent}:FAIL`); log.error(`q${m.questId} ${w.label} ${spent} failed:`, e.message.slice(0, 120)); }
       await sleep(s.pauseMs + Math.random() * (s.chunkJitterMs || 0)); // separate traders, not one burst
     }
@@ -83,7 +102,8 @@ export async function syncAll() {
   const gapMs = ((s.spreadMin || 0) * 60000 * 2) / Math.max(1, order.length); // spread the run over ~spreadMin minutes
   for (const m of order) { results.push(await syncMarket(m, s)); if (gapMs) await sleep(Math.random() * gapMs); }
   const moved = results.filter((r) => r.spend), inBand = results.filter((r) => r.skipped === 'in-band').length;
-  const summary = { markets: markets.length, inBand, moved: moved.length, spent: moved.reduce((a, r) => a + (r.spend || 0), 0), errors: results.filter((r) => r.error).length, results };
-  patchRuntime({ lastOddsSync: { t: new Date().toISOString(), markets: summary.markets, inBand, moved: summary.moved, spent: summary.spent, errors: summary.errors } });
+  const tradeOk = results.reduce((a, r) => a + (r.ok || 0), 0), tradeFail = results.reduce((a, r) => a + (r.fail || 0), 0);
+  const summary = { markets: markets.length, inBand, moved: moved.length, spent: moved.reduce((a, r) => a + (r.spend || 0), 0), tradeOk, tradeFail, errors: results.filter((r) => r.error).length, results };
+  patchRuntime({ lastOddsSync: { t: new Date().toISOString(), markets: summary.markets, inBand, moved: summary.moved, spent: summary.spent, tradeOk, tradeFail, errors: summary.errors } });
   return summary;
 }

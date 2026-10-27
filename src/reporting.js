@@ -44,7 +44,7 @@ function writeDaily(snap, t, m) {
     ...CATEGORIES.map((c) => `  - ${c.name}: ${m.byCat[c.name].live}/${m.byCat[c.name].target}`), '',
     `## Trading (24h)`, `- trades: ${t.n} · ok ${t.ok} · fail ${t.fail} · success ${t.successRate != null ? (t.successRate * 100).toFixed(1) + '%' : '-'}`, `- volume: ${fmt(t.volume)} USDP`, '',
     `## Treasury`, `- total SOL ${fmt(snap.sol, 4)} · total USDP ${fmt(snap.usdp)} · FUNDER ${fmt(snap.funderSol, 4)} SOL / ${fmt(snap.funderUsdp)} USDP`, '',
-    `## Odds sync`, snap.lastOddsSync ? `- ${snap.lastOddsSync.t}: ${snap.lastOddsSync.markets} markets, ${snap.lastOddsSync.inBand} in band, ${snap.lastOddsSync.moved} moved, spent ${fmt(snap.lastOddsSync.spent)} USDP, errors ${snap.lastOddsSync.errors}` : '- (none yet)', '',
+    `## Odds sync`, snap.lastOddsSync ? `- ${snap.lastOddsSync.t}: ${snap.lastOddsSync.markets} markets, ${snap.lastOddsSync.inBand} in band, ${snap.lastOddsSync.moved} moved, spent ${fmt(snap.lastOddsSync.spent)} USDP, trades ${snap.lastOddsSync.tradeOk ?? '?'} ok / ${snap.lastOddsSync.tradeFail ?? '?'} failed, errors ${snap.lastOddsSync.errors}` : '- (none yet)', '',
   ];
   fs.writeFileSync(file, lines.join('\n'));
 }
