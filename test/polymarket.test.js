@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { normalizeMarket, resolutionOf } from '../src/polymarket.js';
-import { planMove } from '../src/oddsSync.js';
+import { planMove, assignChunks, FEE_BUFFER } from '../src/oddsSync.js';
 import { LsLmsr } from '../src/lslmsr.js';
 import { ratiosFromYes } from '../src/research.js';
 
@@ -26,3 +26,13 @@ test('planMove skips inside band, bounds the move, splits across wallets', () =>
   assert.equal(down.outcome, 'NO'); assert.equal(down.target, 0.42);
 });
 test('ratiosFromYes clamps and sums to 100', () => { assert.deepEqual(ratiosFromYes(0.62), ['62', '38']); assert.deepEqual(ratiosFromYes(0.01), ['5', '95']); });
+
+test('assignChunks: only wallets that can pay amount + fee, budgets tracked across chunks', () => {
+  const pool = [{ w: { label: 'A' }, usdp: 2000 }, { w: { label: 'B' }, usdp: 300 }, { w: { label: 'C' }, usdp: 900 }];
+  const out = assignChunks([750, 750, 750], pool);
+  assert.deepEqual(out.map((o) => [o.w.label, o.spent, o.shrunk]), [['A', 750, false], ['C', 750, false], ['A', 750, false]]);
+  // nobody covers the chunk → richest wallet, shrunk to what it can afford; dust chunks dropped
+  const poor = assignChunks([750, 750], [{ w: { label: 'X' }, usdp: 420 }]);
+  assert.deepEqual(poor.map((o) => [o.w.label, o.spent, o.shrunk]), [['X', Math.floor(420 / FEE_BUFFER), true]]);
+  assert.deepEqual(assignChunks([500], []), []);
+});
