@@ -58,8 +58,9 @@ export const DEFAULT_SETTINGS = {
   trader: { tradesPerDay: num('TRADES_PER_DAY', 800), weekendFactor: 0.8, burstP: 0.06, coverP: 0.25, band: 0.05, sellP: 0.3, minHoldMin: 120, followMove: 0.03, maxBuyFrac: 0.15, snapMin: 10, minGapMs: 4000,
     decidedP: 0.985 }, // organic trading stops once Polymarket is past this (or the Polymarket market closed)
   oddsSync: { cron: env('ODDS_SYNC_CRON', '7 * * * *'), band: num('ODDS_BAND', 0.02), maxMove: num('MAX_MOVE_PER_SYNC', 0.08), maxSpend: num('ODDS_MAX_SPEND', 3000), walletsMin: 2, walletsMax: 4, pauseMs: 2000, chunkJitterMs: 60000, spreadMin: 40,
-    // Polymarket ≥ decisiveP (or ≤ 1−decisiveP): the result is effectively known → no per-run move cap, bigger budget
-    decisiveP: 0.95, decisiveMaxSpend: num('ODDS_DECISIVE_MAX_SPEND', 15000) },
+    // Polymarket ≥ decisiveP (or ≤ 1−decisiveP): the result is effectively known → no per-run move cap, bigger budget.
+    // Not lower: at 0.95 steady long-shot markets (3–5%) qualified and burned ~600k USDP in 2 days against organic flow.
+    decisiveP: 0.985, decisiveMaxSpend: num('ODDS_DECISIVE_MAX_SPEND', 5000) },
   funding: { cron: '*/30 * * * *', solMin: num('SOL_MIN', 0.03), solTopup: num('SOL_TOPUP', 0.04), usdpMin: num('USDP_MIN', 500), usdpTopup: num('USDP_TOPUP', 5000), traderSolInit: 0.08, traderUsdpInit: 50000, creatorSolInit: 0.3, creatorUsdpInit: 900000, funderSolReserve: 0.2 },
   resolver: { cron: '30 0 * * *' },
   reporter: { cron: '3 * * * *' },
