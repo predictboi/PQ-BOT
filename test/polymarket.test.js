@@ -1,7 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { normalizeMarket, resolutionOf } from '../src/polymarket.js';
-import { planMove, assignChunks, FEE_BUFFER, isDecisive } from '../src/oddsSync.js';
+import { planMove, assignChunks, FEE_BUFFER, isDecisive, isTail } from '../src/oddsSync.js';
+import { yesBuyProb } from '../src/trader.js';
 import { LsLmsr } from '../src/lslmsr.js';
 import { ratiosFromYes, tradingEnd } from '../src/research.js';
 
@@ -52,4 +53,23 @@ test('isDecisive: near 0 or 1 only', () => {
   assert.equal(isDecisive(0.995), true); assert.equal(isDecisive(0.03), true);
   assert.equal(isDecisive(0.5), false); assert.equal(isDecisive(0.94), false); assert.equal(isDecisive(null), false);
   assert.equal(isDecisive(0.97, 0.985), false); assert.equal(isDecisive(0.99, 0.985), true);
+});
+
+test('isTail: both price and target in the same tail', () => {
+  assert.equal(isTail(0.05, 0.03), true);
+  assert.equal(isTail(0.95, 0.97), true);
+  assert.equal(isTail(0.05, 0.15), false); // target left the tail
+  assert.equal(isTail(0.05, 0.97), false); // opposite tails
+  assert.equal(isTail(0.5, 0.5), false);
+  assert.equal(isTail(null, 0.05), false);
+});
+
+test('yesBuyProb: centered on the target, so long-shot flow does not drift up', () => {
+  assert.equal(yesBuyProb(0.5, 0.5), 0.5);
+  assert.ok(Math.abs(yesBuyProb(0.05, 0.05) - 0.05) < 1e-9);
+  assert.ok(yesBuyProb(0.06, 0.05) < 0.05); // above target → fewer YES buys
+  assert.ok(yesBuyProb(0.55, 0.6) > 0.6);
+  assert.equal(yesBuyProb(0.01, 0.01), 0.03); // clamped
+  // equal-dollar flow balances at the target: YES shares·P(YES) ≈ NO shares·P(NO)
+  const p = 0.05, q = yesBuyProb(p, p); assert.ok(Math.abs(q / p - (1 - q) / (1 - p)) < 1e-9);
 });

@@ -60,7 +60,10 @@ export const DEFAULT_SETTINGS = {
   oddsSync: { cron: env('ODDS_SYNC_CRON', '7 * * * *'), band: num('ODDS_BAND', 0.02), maxMove: num('MAX_MOVE_PER_SYNC', 0.08), maxSpend: num('ODDS_MAX_SPEND', 3000), walletsMin: 2, walletsMax: 4, pauseMs: 2000, chunkJitterMs: 60000, spreadMin: 40,
     // Polymarket ≥ decisiveP (or ≤ 1−decisiveP): the result is effectively known → no per-run move cap, bigger budget.
     // Not lower: at 0.95 steady long-shot markets (3–5%) qualified and burned ~600k USDP in 2 days against organic flow.
-    decisiveP: 0.985, decisiveMaxSpend: num('ODDS_DECISIVE_MAX_SPEND', 5000) },
+    decisiveP: 0.985, decisiveMaxSpend: num('ODDS_DECISIVE_MAX_SPEND', 5000),
+    // Long-shot / near-certain markets (price and target both < tailP or > 1−tailP): moving them is expensive and the
+    // last cents don't matter, so a wider band and a smaller budget. At 0.02 / 3000 they burned ~490k USDP a day.
+    tailP: 0.1, tailBand: 0.04, tailMaxSpend: 1000 },
   funding: { cron: '*/30 * * * *', solMin: num('SOL_MIN', 0.03), solTopup: num('SOL_TOPUP', 0.04), usdpMin: num('USDP_MIN', 500), usdpTopup: num('USDP_TOPUP', 5000), traderSolInit: 0.08, traderUsdpInit: 50000, creatorSolInit: 0.3, creatorUsdpInit: 900000, funderSolReserve: 0.2 },
   resolver: { cron: '30 0 * * *' },
   reporter: { cron: '3 * * * *' },

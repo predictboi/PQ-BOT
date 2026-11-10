@@ -14,6 +14,12 @@ import { PERSONAS, assignPersonas, assignFavorites, popularity, rateAt, nextGapM
 const log = createLogger('trader');
 const TRADES = path.join(PATHS.reports, 'trades.jsonl');
 const DAY = 86400000;
+/**
+ * Chance an in-band organic trade buys YES. Centered on the target probability, not 0.5: equal-dollar buys move a
+ * long-shot's price far more on the YES side (shares ≈ $/p), so a 50/50 mix keeps pushing 5% markets up and odds
+ * sync pays to push them back. At ps the YES and NO flows balance.
+ */
+export const yesBuyProb = (p, ps) => clamp(ps + (ps - p) * 2, 0.03, 0.97);
 const pick = (items, weight) => { const tot = items.reduce((a, x) => a + weight(x), 0); let u = Math.random() * tot; for (const x of items) { u -= weight(x); if (u <= 0) return x; } return items[items.length - 1]; };
 
 export class VolumeTrader {
@@ -73,7 +79,7 @@ export class VolumeTrader {
     let oi;
     if (p > ps + s.band) oi = 1; else if (p < ps - s.band) oi = 0;
     else if (ev.oi != null) oi = ev.oi;
-    else oi = Math.random() < clamp(0.5 + (ps - p) * 4, 0.2, 0.8) ? 0 : 1;
+    else oi = Math.random() < yesBuyProb(p, ps) ? 0 : 1;
     const key = `${w.label}:${m.questId}:${oi}`; const h = o.held[key] || { amt: 0, at: 0 };
     const ageDays = m.createdAt ? (Date.now() - new Date(m.createdAt).getTime()) / DAY : 99;
     const sellP = ageDays < 3 ? s.sellP / 2 : s.sellP; // new markets: mostly buying
