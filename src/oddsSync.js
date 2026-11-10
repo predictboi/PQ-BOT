@@ -31,6 +31,9 @@ export function planMove({ p, pStar, model, band, maxMove, maxSpend, walletsMin,
 /** Polymarket price so close to 0/1 that the result is effectively known (threshold = YES side, e.g. 0.95). */
 export const isDecisive = (pStar, threshold = 0.95) => pStar != null && (pStar >= threshold || pStar <= 1 - threshold);
 
+/** Both our price and the target sit in the same tail (< tailP or > 1 − tailP). */
+export const isTail = (p, pStar, tailP = 0.1) => p != null && pStar != null && ((p < tailP && pStar < tailP) || (p > 1 - tailP && pStar > 1 - tailP));
+
 /**
  * LS-LMSR model for a quest from the on-chain market account (read-only). The site's displayed odds match the chain;
  * backend `quest.lslmsrState` was null for weeks and, once it returned data, carried shares inflated by the duplicated
@@ -82,7 +85,10 @@ export async function syncMarket(m, s) {
     const targets = loadRuntime().targets || {}; targets[m.questId] = { pStar: round(pStar, 4), source, at: rec.t, ...(rec.pmClosed ? { closed: true } : {}) }; patchRuntime({ targets });
     patchMarket(m.questId, { p: round(p, 4), pStar: round(pStar, 4), pAt: rec.t });
     const decisive = isDecisive(pStar, s.decisiveP); if (decisive) rec.decisive = true;
-    const plan = planMove({ p, pStar, model, band: s.band, maxMove: decisive ? 1 : s.maxMove, maxSpend: decisive ? (s.decisiveMaxSpend ?? s.maxSpend) : s.maxSpend, walletsMin: s.walletsMin, walletsMax: s.walletsMax });
+    const tail = !decisive && s.tailP != null && isTail(p, pStar, s.tailP); if (tail) rec.tail = true;
+    const band = tail ? (s.tailBand ?? s.band) : s.band;
+    const maxSpend = decisive ? (s.decisiveMaxSpend ?? s.maxSpend) : tail ? (s.tailMaxSpend ?? s.maxSpend) : s.maxSpend;
+    const plan = planMove({ p, pStar, model, band, maxMove: decisive ? 1 : s.maxMove, maxSpend, walletsMin: s.walletsMin, walletsMax: s.walletsMax });
     if (plan.skip) { rec.skipped = plan.reason; rec.delta = round(plan.delta, 4); return rec; }
     Object.assign(rec, { outcome: plan.outcome, spend: plan.spend, moveTarget: plan.target, expectedAfter: plan.expectedAfter, capped: plan.capped });
     const answerId = plan.i === 0 ? m.yesAnswerId : m.noAnswerId; if (!answerId) { rec.skipped = 'no-answer-id'; return rec; }
