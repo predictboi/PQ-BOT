@@ -58,11 +58,26 @@ async function claudeWriter(items) {
 
 const score = (m) => (m.volume24hr || 0) * (m.eventMarketCount === 1 ? 1.5 : 1) + (m.liquidity || 0) * 0.05; // liquid, active markets first; single-market events get a bonus
 
+// Long shots / near-certainties make dull markets and cost the odds-sync agent the most to hold in line.
+export const DEFAULT_PRICE_BAND = [0.1, 0.9];
+
 /** Choose `need` markets, one per Polymarket event, skipping events we already list. With buckets: round-robin over them. */
-export function chooseMarkets(cands, need, { buckets = null, exclude = null, priceBand = null, usedEvents = new Set() } = {}) {
+// Name-like bigrams ("Jensen Huang", "Strait Of Hormuz" → "Strait Of") used to stop one story from filling the board.
+const STOP = new Set(['Will', 'The', 'What', 'Who', 'Which', 'When', 'How', 'New', 'Another', 'Fourth', 'Third', 'Next', 'By', 'In', 'On', 'Of', 'And', 'Or', 'A', 'An', 'Is', 'Be', 'Does', 'Do', 'December', 'November', 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'U', 'S', 'US']);
+export function themeKeys(text) {
+  const words = String(text || '').replace(/[^A-Za-z\s'-]/g, ' ').split(/\s+/).filter(Boolean);
+  const keys = new Set();
+  for (let i = 0; i + 1 < words.length; i++) { const [a, b] = [words[i], words[i + 1]]; if (/^[A-Z][a-z]+$/.test(a) && /^[A-Z][a-z]+$/.test(b) && !STOP.has(a) && !STOP.has(b)) keys.add(`${a} ${b}`); }
+  return [...keys];
+}
+
+export function chooseMarkets(cands, need, { buckets = null, exclude = null, priceBand = null, usedEvents = new Set(), usedTitles = [], themeCap = 2 } = {}) {
   const ok = (m) => !(exclude && exclude.test(`${m.question} ${m.eventTitle || ''}`)) && !(priceBand && !(m.yesPrice >= priceBand[0] && m.yesPrice <= priceBand[1]));
   const taken = new Set(usedEvents); const chosen = [];
-  const take = (pool) => { for (const m of pool) { const k = m.eventSlug || m.id; if (taken.has(k) || !ok(m)) continue; taken.add(k); chosen.push(m); return true; } return false; };
+  const themes = new Map(); const bump = (t) => { for (const k of themeKeys(t)) themes.set(k, (themes.get(k) || 0) + 1); };
+  for (const t of usedTitles) bump(t);
+  const overTheme = (m) => themeCap > 0 && themeKeys(`${m.question} ${m.eventTitle || ''}`).some((k) => (themes.get(k) || 0) >= themeCap);
+  const take = (pool) => { for (const m of pool) { const k = m.eventSlug || m.id; if (taken.has(k) || !ok(m) || overTheme(m)) continue; taken.add(k); chosen.push(m); bump(`${m.question} ${m.eventTitle || ''}`); return true; } return false; };
   if (!buckets) { for (const m of [...cands].sort((a, b) => score(b) - score(a))) { if (chosen.length >= need) break; take([m]); } return chosen; }
   const pools = buckets.map((b) => cands.filter((m) => b.tags.includes(m.tag)).sort((a, c) => score(c) - score(a)));
   let progress = true;
@@ -78,7 +93,7 @@ export async function pickTopics(categoryId, need, { minDays, maxDays } = {}) {
   const usedTitles = new Set(allMarkets().map((m) => m.title));
   const tags = cat.buckets ? [...new Set(cat.buckets.flatMap((b) => b.tags))] : cat.tags;
   const cands = (await candidateMarkets(tags, { minDays, maxDays })).filter((m) => !used.has(m.conditionId));
-  const chosen = chooseMarkets(cands, need, { buckets: cat.buckets || null, exclude: cat.exclude || null, priceBand: cat.priceBand || null, usedEvents });
+  const chosen = chooseMarkets(cands, need, { buckets: cat.buckets || null, exclude: cat.exclude || null, priceBand: cat.priceBand || DEFAULT_PRICE_BAND, usedEvents, usedTitles: allMarkets().flatMap((m) => [m.title, m.polymarket?.question].filter(Boolean)) });
   let written = null; try { written = await claudeWriter(chosen); } catch (e) { log.warn('Claude writer failed, falling back to template:', e.message); }
   const specs = chosen.map((pm, i) => {
     const w = written?.[i] || templateSpec(pm, cat);
