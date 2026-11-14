@@ -1,6 +1,6 @@
 // CREATOR bot: keep each category at its target number of live markets, create via the user flow, keep markets.json in sync.
 // Each category is owned by one creator wallet (settings.creator.assign); that wallet creates and resolves its markets.
-import { CONFIG, CATEGORIES, categoryById } from './config.js';
+import { CONFIG, CATEGORIES, categoryById, categoryByName } from './config.js';
 import { creatorByLabel, creatorLabels } from './wallets.js';
 import * as pq from './client/polyquest.js';
 import { thumbnailFor } from './images.js';
@@ -42,7 +42,7 @@ export async function syncFromPlatform() {
       const answers = (q.answers || []).map((a) => ({ id: a.id, title: a.title }));
       const yes = answers.find((a) => /^(예|yes)$/i.test(a.title)) || answers[0], no = answers.find((a) => /^(아니오|no)$/i.test(a.title)) || answers[1];
       const existing = marketById(q.id);
-      const rec = { questId: q.id, creator: label, title: q.title, categoryId: q.categoryId, category: q.category?.name || categoryById(q.categoryId)?.name || null, answers, yesAnswerId: yes?.id, noAnswerId: no?.id, endDate: q.endDate, status: q.status, finalAnswerId: q.finalAnswerId ?? null, totalAmount: Number(q.totalAmount || 0), imageUrl: q.imageUrl, relevantLink: q.relevantLink, percent: (q.answers || []).map((a) => a.percent), platformUpdatedAt: q.updatedAt };
+      const rec = { questId: q.id, creator: label, title: q.title, categoryId: (q.category?.name && categoryByName(q.category.name)?.id) ?? q.categoryId, category: q.category?.name || categoryById(q.categoryId)?.name || null, answers, yesAnswerId: yes?.id, noAnswerId: no?.id, endDate: q.endDate, status: q.status, finalAnswerId: q.finalAnswerId ?? null, totalAmount: Number(q.totalAmount || 0), imageUrl: q.imageUrl, relevantLink: q.relevantLink, percent: (q.answers || []).map((a) => a.percent), platformUpdatedAt: q.updatedAt };
       if (!existing) { rec.createdAt = q.createdAt; rec.polymarket = null; const pm = pmFromLink(q.relevantLink); if (pm) rec.polymarket = { ...pm, recoveredFromLink: true, id: null, tokenIds: [] }; added++; }
       else updated++;
       const pmRef = rec.polymarket || existing?.polymarket;

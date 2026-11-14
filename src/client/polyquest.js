@@ -4,7 +4,7 @@
 import crypto from 'node:crypto';
 import bs58 from 'bs58';
 import { VersionedTransaction, Transaction } from '@solana/web3.js';
-import { CONFIG } from '../config.js';
+import { CONFIG, categoryById } from '../config.js';
 import { withTimeout, sleep, createLogger } from '../util.js';
 import { readMarket } from '../chain/read.js';
 import { LsLmsr } from '../lslmsr.js';
@@ -120,12 +120,34 @@ export function signEncodedTx(kp, encodedTx) {
   catch { const tx = Transaction.from(raw); tx.partialSign(kp); return tx.serialize().toString('base64'); }
 }
 
+// ---- platform ids: a fresh DB numbers tokens/categories differently, so resolve USDP by mint and categories by name ----
+let idCache = null;
+export async function platformIds({ refresh = false } = {}) {
+  if (idCache && !refresh) return idCache;
+  const [toks, cats] = await Promise.all([tokens(), categories()]);
+  const mint = CONFIG.usdpMint;
+  const usdp = (toks || []).find((t) => [t.address, t.mint, t.tokenAddress, t.mintAddress].includes(mint));
+  if (!usdp) throw new Error(`USDP (${mint}) not in token.listAll (${(toks || []).length} tokens) — seed tokens on the platform first`);
+  const catByName = new Map((cats || []).map((c) => [String(c.name).toLowerCase(), c.id]));
+  idCache = { usdpTokenId: usdp.id, catByName };
+  return idCache;
+}
+export async function platformCategoryId(localId) {
+  if (localId == null) return null;
+  const name = categoryById(localId)?.name; const ids = await platformIds();
+  const id = name ? ids.catByName.get(name.toLowerCase()) : undefined;
+  if (id == null) throw new Error(`category "${name ?? localId}" not in category.listAll — seed categories on the platform first`);
+  return id;
+}
+
 // ---- market creation = quest.draft → sign → quest.confirmDraftLslmsr ----
 export async function createMarket(sess, kp, q) {
+  const ids = CONFIG.dryRun ? { usdpTokenId: CONFIG.usdpTokenId } : await platformIds();
+  const categoryId = CONFIG.dryRun ? q.categoryId ?? null : await platformCategoryId(q.categoryId);
   const input = {
     type: 'LSLMSR', title: q.title, description: q.description ?? null, relevantLink: q.relevantLink ?? null,
     creatorAddress: kp.publicKey.toBase58(), creatorFeePercent: q.creatorFeePercent ?? CONFIG.market.creatorFeePercent,
-    endDate: q.endDateISO, tokenId: q.tokenId ?? CONFIG.usdpTokenId, categoryId: q.categoryId ?? null,
+    endDate: q.endDateISO, tokenId: q.tokenId ?? ids.usdpTokenId, categoryId,
     imageUrl: q.imageUrl, minBetAmount: q.minBetAmount ?? CONFIG.market.minBetAmount, minRaiseAmount: q.minRaiseAmount ?? CONFIG.market.minRaiseAmount,
     programVersion: CONFIG.market.programVersion, collateralKind: q.collateralKind ?? CONFIG.market.collateralKind,
     answers: q.answers, seed: String(q.seed ?? CONFIG.market.seed), alpha: String(q.alpha ?? CONFIG.market.alpha), openingRatios: q.openingRatios.map(String),
