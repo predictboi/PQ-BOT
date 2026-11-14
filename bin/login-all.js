@@ -18,6 +18,6 @@ for (const w of allWallets()) {
     else if (email) note = ` email=${i?.user?.email} (already)`;
     console.log(`${w.label.padEnd(10)} ${w.address} role=${i?.user?.role || '?'}${note}`); ok++;
   } catch (e) { console.log(`${w.label.padEnd(10)} ${w.address} FAIL ${e.message.slice(0, 80)}`); fail++; }
-  await sleep(1500);
+  await sleep(Number(process.env.LOGIN_GAP_MS || 1500));
 }
 console.log(`\nlogged in ${ok}, failed ${fail}`);
