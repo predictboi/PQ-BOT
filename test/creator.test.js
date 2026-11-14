@@ -29,3 +29,12 @@ test('sports buckets: round-robin, one per event, skips excluded and already-lis
   const got = chooseMarkets(cands, 5, { buckets: S.buckets, exclude: S.exclude, priceBand: S.priceBand, usedEvents: new Set(['used']) }).map((m) => m.id);
   assert.deepEqual(got, [5, 3, 6, 2, 4]); // intl, nfl, intl, (mlb used) top-flight club, (nba excluded) … nfl; Gibraltar (5%) is outside the band
 });
+
+test('chooseMarkets caps one story (name bigram) at themeCap, counting already-listed titles', async () => {
+  const { chooseMarkets, themeKeys } = await import('../src/research.js');
+  assert.deepEqual(themeKeys('Will Jensen Huang rejoin NVIDIA by December 31, 2026?'), ['Jensen Huang']);
+  const mk = (id, q, vol) => ({ id, question: q, eventTitle: q, eventSlug: `e${id}`, volume24hr: vol, eventMarketCount: 1, yesPrice: 0.4 });
+  const cands = [mk(1, 'Jensen Huang divorce by December 31?', 90), mk(2, 'Fourth Jensen Huang affair reported?', 80), mk(3, 'Will Jensen Huang join SpaceX?', 70), mk(4, 'Fed hike in December?', 60)];
+  assert.deepEqual(chooseMarkets(cands, 4).map((m) => m.id), [1, 2, 4]);
+  assert.deepEqual(chooseMarkets(cands, 4, { usedTitles: ['Jensen Huang out at NVIDIA?'] }).map((m) => m.id), [1, 4]);
+});
