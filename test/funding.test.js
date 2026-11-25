@@ -30,3 +30,15 @@ test('default SOL budget: 2 creators + 30 traders + reserve fits in 3–4 SOL', 
   assert.ok(Math.abs(sol - (2 * 0.3 + 30 * 0.08)) < 1e-9);
   assert.ok(sol + 0.2 >= 3 && sol + 0.2 <= 4);
 });
+
+test('topup fills SOL up to solTopup (not +solTopup) and only below solMin', () => {
+  const r = [
+    { index: 0, role: 'FUNDER', label: 'FUNDER', address: 'F', sol: 1, usdp: 1e6 },
+    { index: 2, role: 'TRADER', label: 'TRADER-01', address: 'T1', sol: 0.025, usdp: 10_000 },
+    { index: 3, role: 'TRADER', label: 'TRADER-02', address: 'T2', sol: 0.035, usdp: 10_000 },
+    { index: 4, role: 'TRADER', label: 'TRADER-03', address: 'T3', sol: 0, usdp: 10_000 },
+  ];
+  const p = plan(r, 'topup', { solMin: 0.03, solTopup: 0.04 });
+  const sol = Object.fromEntries(p.transfers.filter((t) => t.kind === 'SOL').map((t) => [t.label, t.amount]));
+  assert.deepEqual(sol, { 'TRADER-01': 0.015, 'TRADER-03': 0.04 });
+});

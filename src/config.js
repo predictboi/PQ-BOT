@@ -64,7 +64,7 @@ export const DEFAULT_SETTINGS = {
     // Long-shot / near-certain markets (price and target both < tailP or > 1−tailP): moving them is expensive and the
     // last cents don't matter, so a wider band and a smaller budget. At 0.02 / 3000 they burned ~490k USDP a day.
     tailP: 0.1, tailBand: 0.04, tailMaxSpend: 1000 },
-  funding: { cron: '*/30 * * * *', solMin: num('SOL_MIN', 0.03), solTopup: num('SOL_TOPUP', 0.04), usdpMin: num('USDP_MIN', 500), usdpTopup: num('USDP_TOPUP', 5000), traderSolInit: 0.08, traderUsdpInit: 50000, creatorSolInit: 0.3, creatorUsdpInit: 900000, funderSolReserve: 0.2 },
+  funding: { cron: '*/30 * * * *', solMin: num('SOL_MIN', 0.03), solTopup: num('SOL_TOPUP', 0.04) /* a wallet under solMin is filled up to this balance */, usdpMin: num('USDP_MIN', 500), usdpTopup: num('USDP_TOPUP', 5000), traderSolInit: 0.08, traderUsdpInit: 50000, creatorSolInit: 0.3, creatorUsdpInit: 900000, funderSolReserve: 0.2 },
   resolver: { cron: '30 0 * * *' },
   reporter: { cron: '3 * * * *' },
 };
