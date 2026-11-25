@@ -242,14 +242,35 @@ export async function updateStatus(sess, questId, status, finalAnswerId) {
   return peel(await withTimeout(trpc(sess, 'quest.updateStatus', { id: Number(questId), data }), T.trade, 'quest.updateStatus'));
 }
 
+// ---- login throttle: /api/auth/* returns 429 on bursts (e.g. the resolver claiming for ~30 wallets at once),
+// so logins run one at a time with a minimum gap, and a 429 is retried with backoff ----
+export const isRateLimited = (e) => /\b429\b|too many requests/i.test(String(e?.message || ''));
+export function createLoginThrottle(loginFn, { gapMs = 2000, retries = 4, backoffMs = 5000, sleepFn = sleep, now = () => Date.now() } = {}) {
+  let chain = Promise.resolve(); let last = -Infinity;
+  const run = async (...args) => {
+    for (let attempt = 0; ; attempt++) {
+      const wait = last + gapMs - now(); if (wait > 0) await sleepFn(wait);
+      last = now();
+      try { return await loginFn(...args); }
+      catch (e) {
+        if (attempt >= retries || !isRateLimited(e)) throw e;
+        const d = backoffMs * 2 ** attempt; log.warn(`login rate-limited, retry ${attempt + 1}/${retries} in ${d / 1000}s`); await sleepFn(d);
+      }
+    }
+  };
+  return (...args) => { const p = chain.then(() => run(...args)); chain = p.catch(() => {}); return p; };
+}
+const throttledLogin = createLoginThrottle((kp) => withTimeout(login(kp), T.login, 'login'), { gapMs: Number(process.env.LOGIN_GAP_MS || 2000) });
+
 // ---- session pool: one session per wallet, lazy login, re-login on expiry ----
+// Platform sessions last 7 days; re-login daily (and on any 401/403 via withSession) to keep auth traffic low.
 export class SessionPool {
-  constructor({ maxAgeMs = 6 * 3600 * 1000 } = {}) { this.sessions = new Map(); this.maxAgeMs = maxAgeMs; }
+  constructor({ maxAgeMs = 24 * 3600 * 1000, loginFn = throttledLogin } = {}) { this.sessions = new Map(); this.maxAgeMs = maxAgeMs; this.loginFn = loginFn; }
   async get(kp, { force = false } = {}) {
     const addr = kp.publicKey.toBase58();
     const cur = this.sessions.get(addr);
     if (!force && cur && Date.now() - cur.loggedInAt < this.maxAgeMs) return cur;
-    const sess = await withTimeout(login(kp), T.login, 'login');
+    const sess = await this.loginFn(kp);
     this.sessions.set(addr, sess);
     return sess;
   }
