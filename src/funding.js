@@ -40,7 +40,7 @@ export function plan(rows, mode = 'topup', opts = {}) {
     const usdpTarget = w.role === 'CREATOR' ? f.creatorUsdpInit : f.traderUsdpInit;
     let sol = 0, usdp = 0;
     if (mode === 'initial') { sol = Math.max(0, solTarget - w.sol); usdp = Math.max(0, usdpTarget - w.usdp); }
-    else { if (w.sol < f.solMin) sol = f.solTopup; if (w.usdp < f.usdpMin) usdp = f.usdpTopup; }
+    else { if (w.sol < f.solMin) sol = Math.max(0, f.solTopup - w.sol); /* fill UP TO solTopup, not +solTopup: keeps idle SOL in trader wallets low */ if (w.usdp < f.usdpMin) usdp = f.usdpTopup; }
     sol = round(sol, 4); usdp = round(usdp, 2);
     if (sol >= 0.001) transfers.push({ to: w.address, label: w.label, kind: 'SOL', amount: sol, reason: mode });
     if (usdp >= 1) transfers.push({ to: w.address, label: w.label, kind: 'USDP', amount: usdp, reason: mode });
